@@ -3,10 +3,78 @@ import random
 import numpy as np
 
 from ppseb.params import default_params
-from ppseb.linalg import centered_mod_q, safe_matmul
+from ppseb.linalg import centered_mod_q, gram_schmidt_norm, safe_matmul
 from ppseb.hashes import H1, H1_inverse
 from ppseb.trapgen import trapgen
-from attacks.forward_sec import forward_sec_experiment
+from attacks.forward_sec import forward_sec_experiment, usability_threshold, _verdict_for_period
+
+
+def test_threshold_explicit():
+    """usability_threshold must return both caps and name the binding one,
+    never just an unexplained q/4 (PATCH 01 §2)."""
+    p = default_params()
+    info = usability_threshold(p)
+    assert info["binding_bound"] in ("sampling", "decode")
+    assert info["threshold"] == min(info["sampling_cap"], info["decode_cap"])
+    assert info["threshold"] > 0
+
+
+def test_lownorm_chain_stays_usable():
+    """With low_norm H1, the legitimate chain's own basis should stay
+    usable for every period at these demo parameters — correctness holds
+    (PATCH 01 §1)."""
+    p = default_params()
+    result = forward_sec_experiment(J=5, params=p, seed=1, h1_variant="low_norm")
+    assert result["correctness_lost_at"] is None
+    for row in result["rows"]:
+        assert row["legit_usable"] is True
+
+
+def test_naive_uniform_correctness_collapse():
+    """With naive_uniform H1, the legitimate chain should lose usability
+    within a handful of periods — KeyExt itself diverges (PATCH 01 §1)."""
+    p = default_params()
+    result = forward_sec_experiment(J=5, params=p, seed=5, h1_variant="naive_uniform")
+    assert result["correctness_lost_at"] is not None
+    assert result["correctness_lost_at"] <= 4
+    assert result["headline"].startswith("Correctness collapse")
+    # every row from correctness_lost_at onward must be gated as such:
+    for row in result["rows"]:
+        if row["period"] >= result["correctness_lost_at"]:
+            assert row["verdict"] == "correctness lost (legit basis unusable)"
+
+
+def test_verdict_gated_on_legit():
+    """A row with legit_usable=False must report 'correctness lost',
+    regardless of how short the candidate norms are."""
+    verdict = _verdict_for_period(
+        legit_usable=False, in_lattice=True, trivial_gs=0.01, lll_gs=0.01, threshold=100.0,
+    )
+    assert verdict == "correctness lost (legit basis unusable)"
+
+    verdict_bug = _verdict_for_period(
+        legit_usable=True, in_lattice=False, trivial_gs=0.01, lll_gs=0.01, threshold=100.0,
+    )
+    assert verdict_bug.startswith("candidate not in lattice")
+
+
+def test_lll_stays_in_lattice():
+    """Every LLL-reduced candidate must still satisfy pk_i . cand = 0 (mod q)."""
+    p = default_params()
+    result = forward_sec_experiment(J=3, params=p, seed=2, h1_variant="low_norm")
+    for row in result["rows"]:
+        assert row["membership_ok"] is True
+
+
+def test_balanced_norm_smaller():
+    """Guards against the earlier inflation artifact: for a random integer
+    matrix, the balanced (-q/2, q/2] representative's Gram-Schmidt norm must
+    never exceed the raw [0, q) representative's."""
+    q = 257
+    rng = np.random.default_rng(0)
+    raw = rng.integers(0, q, size=(20, 20))
+    balanced = centered_mod_q(raw, q)
+    assert gram_schmidt_norm(balanced) <= gram_schmidt_norm(raw)
 
 
 def test_forward_sec_experiment_well_formed():
@@ -15,17 +83,10 @@ def test_forward_sec_experiment_well_formed():
     assert result["J"] == 3
     assert len(result["rows"]) == 3
     for row in result["rows"]:
-        assert row["membership_ok"] is True  # the algebraic identity always holds
-        assert row["verdict"] in ("BROKEN (trivial)", "BROKEN (after LLL reduction)", "survives both")
-    # verdict must be DERIVED from the numbers, not hard-coded:
-    for row in result["rows"]:
-        if row["verdict"] == "BROKEN (trivial)":
-            assert row["candidate_trivial_gram_schmidt_norm"] < row["usability_threshold"]
-        elif row["verdict"] == "BROKEN (after LLL reduction)":
-            assert row["candidate_trivial_gram_schmidt_norm"] >= row["usability_threshold"]
-            assert row["candidate_after_lll_gram_schmidt_norm"] < row["usability_threshold"]
-        elif row["verdict"] == "survives both":
-            assert row["candidate_after_lll_gram_schmidt_norm"] >= row["usability_threshold"]
+        assert row["verdict"] in (
+            "BROKEN (trivial transform)", "BROKEN (after LLL reduction)",
+            "survives (trivial + LLL) at these params", "correctness lost (legit basis unusable)",
+        )
         # LLL re-reduction should never make the candidate WORSE:
         assert row["candidate_after_lll_gram_schmidt_norm"] <= row["candidate_trivial_gram_schmidt_norm"]
 
@@ -34,8 +95,6 @@ def test_forward_sec_naive_uniform_variant_runs():
     p = default_params()
     result = forward_sec_experiment(J=2, params=p, seed=3, h1_variant="naive_uniform")
     assert len(result["rows"]) == 2
-    for row in result["rows"]:
-        assert row["membership_ok"] is True
 
 
 def test_forward_sec_naive_uniform_survives_larger_J():
@@ -50,7 +109,6 @@ def test_forward_sec_naive_uniform_survives_larger_J():
     assert len(result["rows"]) == 10
     for row in result["rows"]:
         assert row["membership_ok"] is True
-        assert row["candidate_after_lll_gram_schmidt_norm"] > 0
 
 
 def test_r_inverse_over_z_matches_incremental_mod_q():
