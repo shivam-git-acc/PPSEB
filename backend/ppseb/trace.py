@@ -18,20 +18,20 @@ EVENT_TYPES = {
 MAX_PREVIEW_DIM = 12
 
 
-def _jsonable(x: Any) -> Any:
+def jsonable(x: Any) -> Any:
     """Make numpy / python values JSON-safe (plain ints/floats/lists)."""
     if isinstance(x, np.ndarray):
-        return _jsonable(x.tolist())
+        return jsonable(x.tolist())
     if isinstance(x, (np.integer,)):
         return int(x)
     if isinstance(x, (np.floating,)):
         return float(x)
     if isinstance(x, list):
-        return [_jsonable(v) for v in x]
+        return [jsonable(v) for v in x]
     if isinstance(x, tuple):
-        return [_jsonable(v) for v in x]
+        return [jsonable(v) for v in x]
     if isinstance(x, dict):
-        return {k: _jsonable(v) for k, v in x.items()}
+        return {k: jsonable(v) for k, v in x.items()}
     return x
 
 
@@ -51,7 +51,7 @@ def matrix_payload(M: np.ndarray, name: str = "") -> dict:
         preview = M[:r, :c].tolist()
         truncated = (M.shape[0] > MAX_PREVIEW_DIM) or (M.shape[1] > MAX_PREVIEW_DIM)
         norm = float(np.linalg.norm(M.astype(float)))
-    return _jsonable({
+    return jsonable({
         "name": name,
         "shape": shape,
         "preview": preview,
@@ -81,7 +81,7 @@ class Trace:
             "type": type,
             "title": title,
             "detail": detail,
-            "data": _jsonable(data or {}),
+            "data": jsonable(data or {}),
             "algo": algo,
             "highlight": highlight,
         }
