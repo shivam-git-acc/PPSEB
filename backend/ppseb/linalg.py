@@ -207,10 +207,10 @@ def lll_reduce(B: np.ndarray, delta: float = 0.75, max_steps: int = 200_000) -> 
     mu = [[0.0] * k for _ in range(k)]
 
     def recompute(i: int) -> None:
-        bi = basis[i].astype(float).copy()
-        bi_full = basis[i]
+        bi_full_f = basis[i].astype(float)  # convert once, not once per j
+        bi = bi_full_f.copy()
         for j in range(i):
-            num = float(np.dot(bi_full.astype(float), Bstar[j]))
+            num = float(np.dot(bi_full_f, Bstar[j]))
             mu[i][j] = num / normsq[j] if normsq[j] > 0 else 0.0
             bi -= mu[i][j] * Bstar[j]
         Bstar[i] = bi
@@ -244,6 +244,18 @@ def lll_reduce(B: np.ndarray, delta: float = 0.75, max_steps: int = 200_000) -> 
 # Rank over GF(q) — used to test linear independence when re-randomizing
 # a basis (NewBasisDel's RandBasis step)
 # --------------------------------------------------------------------------
+
+def real_rank(M: np.ndarray) -> int:
+    """Integer/rational linear independence rank of M's columns, via a
+    numerically-tolerant SVD. Note this is *not* the same question as
+    `rank_mod_q`: a basis of L_perp_q(A) has determinant +/- q^n, so it is
+    always rank-deficient mod q by construction — independence of lattice
+    basis vectors must be tested over Z/Q, not over F_q.
+    """
+    if M.shape[1] == 0:
+        return 0
+    return int(np.linalg.matrix_rank(M.astype(float)))
+
 
 def rank_mod_q(M: np.ndarray, q: int) -> int:
     if M.shape[1] == 0:
@@ -289,14 +301,22 @@ def discrete_gaussian_1d(center: float, sigma: float, rng: random.Random, tail: 
             return z
 
 
-def klein_sample(basis: np.ndarray, center: np.ndarray, sigma: float, rng: random.Random) -> np.ndarray:
+def klein_sample(
+    basis: np.ndarray, center: np.ndarray, sigma: float, rng: random.Random,
+    Bstar: list[np.ndarray] | None = None,
+) -> np.ndarray:
     """Klein/GPV discrete-Gaussian sampler over the lattice spanned by
     `basis` (columns), centered at `center`. Returns an integer vector in
     the lattice, close to `center`, sampled from (approximately) the
     discrete Gaussian of width `sigma`.
+
+    `Bstar` (the basis's Gram-Schmidt vectors) may be precomputed and passed
+    in when sampling many times against the same basis — recomputing it is
+    the dominant cost of this function.
     """
     m, k = basis.shape
-    Bstar, _mu = gram_schmidt(basis)
+    if Bstar is None:
+        Bstar, _mu = gram_schmidt(basis)
     c = center.astype(float).copy()
     z = [0] * k
     for i in range(k - 1, -1, -1):
