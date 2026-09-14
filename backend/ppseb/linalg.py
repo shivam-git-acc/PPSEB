@@ -289,14 +289,29 @@ def rank_mod_q(M: np.ndarray, q: int) -> int:
 # --------------------------------------------------------------------------
 
 def discrete_gaussian_1d(center: float, sigma: float, rng: random.Random, tail: float = 8.0) -> int:
-    """Sample z ~ D_{Z, sigma, center} by rejection sampling."""
+    """Sample z ~ D_{Z, sigma, center} by rejection sampling over a uniform
+    proposal on [center - tail*sigma, center + tail*sigma].
+
+    Acceptance is computed *relative to the nearest integer's density*
+    (rho(z)/rho(z_best), which is always <= 1 and exactly 1 at z_best) rather
+    than the raw density rho(z). With small sigma (frequent here: some
+    Gram-Schmidt vectors of the re-randomized bases run into the hundreds,
+    so sigma/||b_i*|| can be << 1), the raw density underflows to exactly
+    0.0 for *every* integer in range, including the best one — an unbiased
+    but naive rejection sampler then rejects forever. Normalizing by the
+    peak density guarantees the best candidate always accepts.
+    """
     lo = int(np.floor(center - tail * sigma))
     hi = int(np.ceil(center + tail * sigma))
     if hi <= lo:
         hi = lo + 1
+    z_best = min(max(round(center), lo), hi)
+    best_sq_dist = (z_best - center) ** 2
+    two_sigma_sq = 2 * sigma * sigma
     while True:
         z = rng.randint(lo, hi)
-        p = np.exp(-((z - center) ** 2) / (2 * sigma * sigma))
+        d = (z - center) ** 2 - best_sq_dist  # >= 0, so p <= 1 (=1 at z_best)
+        p = np.exp(-d / two_sigma_sq)
         if rng.random() < p:
             return z
 
@@ -324,7 +339,14 @@ def klein_sample(
         denom = float(np.dot(bi_star, bi_star))
         ci = float(np.dot(c, bi_star)) / denom if denom > 0 else 0.0
         norm_bi_star = float(np.linalg.norm(bi_star))
-        sigma_i = max(sigma / norm_bi_star, 1e-6) if norm_bi_star > 0 else sigma
+        # Clamp both ends: too-small sigma_i just means "round to nearest"
+        # (handled by discrete_gaussian_1d's own floor), but a too-small
+        # norm_bi_star (a near-degenerate Gram-Schmidt vector, e.g. from an
+        # almost-dependent basis candidate slipping through) would blow
+        # sigma_i up to where the rejection-sampling range is astronomically
+        # wide and effectively never terminates — cap it defensively.
+        sigma_i = sigma / norm_bi_star if norm_bi_star > 0 else sigma
+        sigma_i = min(max(sigma_i, 1e-6), sigma * 1000)
         zi = discrete_gaussian_1d(ci, sigma_i, rng)
         z[i] = zi
         c = c - zi * basis[:, i].astype(float)

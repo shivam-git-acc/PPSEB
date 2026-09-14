@@ -16,7 +16,6 @@ import random
 
 import numpy as np
 from sympy.polys.domains import ZZ
-from sympy.polys.galoistools import gf_irreducible
 
 from .linalg import mat_inv_mod
 from .params import Params
@@ -87,32 +86,46 @@ def H1_inverse(R: np.ndarray) -> np.ndarray:
 
 
 # --------------------------------------------------------------------------
-# H2: full-rank-difference (FRD) encoding via a companion-matrix embedding of
-# GF(q^n), block-diagonally repeated up to size m (CLAUDE.md §3.4).
+# H2: full-rank-difference (FRD) encoding via a LOW-NORM twisted-circulant
+# embedding of GF(q^n), block-diagonally repeated up to size m (CLAUDE.md §3.4).
 # --------------------------------------------------------------------------
 
+# H2's coefficient vector a=(a_0,...,a_{n-1}) is drawn from a SMALL range
+# rather than the full [0, q); see the module-level note above H2 for why.
+H2_COEFF_RANGE = 11
+
+
 @functools.lru_cache(maxsize=None)
-def _irreducible_companion(n: int, q: int) -> np.ndarray:
-    """Companion matrix C (n x n, mod q) of a monic irreducible degree-n
-    polynomial over GF(q): C represents 'multiply by x' in GF(q^n) = GF(q)[x]/(f).
-    Cached per (n, q) for the lifetime of the process so H2 is a consistent
-    deterministic function of (w, j) throughout a lab session.
+def _irreducible_twist(n: int, q: int) -> int:
+    """Smallest c >= 2 for which f(x) = x^n - c is irreducible over GF(q).
+    Represents GF(q^n) = GF(q)[x]/(x^n - c), whose 'multiply by x' operator is
+    a simple twisted cyclic shift (x^n = c) rather than a general companion
+    matrix — that's what lets `_twisted_circulant` build a matrix whose
+    entries are literally the (small) input coefficients, instead of an
+    opaque companion-matrix expansion that spreads them across all of Z_q.
     """
-    coeffs = gf_irreducible(n, q, ZZ)  # [1, a_1, ..., a_n], f = x^n + sum a_k x^{n-k}
-    d = [(-int(coeffs[n - i])) % q for i in range(n)]  # x^n = sum d_i x^i mod f
-    C = np.zeros((n, n), dtype=np.int64)
-    for i in range(n - 1):
-        C[i + 1, i] = 1
-    C[:, n - 1] = d
-    return C
+    from sympy.polys.galoistools import gf_irreducible_p
+    for c in range(2, q):
+        f = [1] + [0] * (n - 1) + [(-c) % q]
+        if gf_irreducible_p(f, q, ZZ):
+            return c
+    raise RuntimeError(f"no irreducible x^{n} - c found mod q={q}")
 
 
-def _companion_power_basis(C: np.ndarray, q: int) -> list[np.ndarray]:
-    n = C.shape[0]
-    powers = [np.eye(n, dtype=np.int64)]
-    for _ in range(1, n):
-        powers.append((powers[-1] @ C) % q)
-    return powers
+def _twisted_circulant(a: list[int], c: int, q: int) -> np.ndarray:
+    """The n x n matrix representing 'multiply by the field element with
+    coefficients a' in GF(q)[x]/(x^n - c). Because x^n = c in this ring,
+    shifting a coefficient past position n-1 just re-enters at position 0
+    scaled by c: M[i,j] = a[i-j] if i>=j, else c*a[i-j+n] (mod q). Entries
+    are the small a_i's themselves (times the small constant c in the
+    wrapped corner) — no companion-power blowup.
+    """
+    n = len(a)
+    M = np.zeros((n, n), dtype=np.int64)
+    for i in range(n):
+        for j in range(n):
+            M[i, j] = a[i - j] if i >= j else (c * a[i - j + n]) % q
+    return M
 
 
 def H2(w: str, j: int, params: Params, trace: Trace | None = None) -> np.ndarray:
@@ -121,42 +134,56 @@ def H2(w: str, j: int, params: Params, trace: Trace | None = None) -> np.ndarray
     block-diagonal repetition of the matrix representing multiplication by a
     nonzero element of the field GF(q^n) — and in a field, multiplication by
     any nonzero element is a bijection, hence its matrix is invertible.
+
+    Low-norm, not just FRD: CLAUDE.md notes H2's output is also "used in
+    NewBasisDel" (Trapdoor, §3.6) exactly where KeyExt uses H1's R — and
+    NewBasisDel only produces a usable (short) delegated basis when its
+    transform argument is low-norm. A plain companion-matrix embedding is
+    invertible-difference but NOT low-norm (its entries spread across all of
+    Z_q), which blows up Trap's norm past the q/4 correctness margin at these
+    toy parameters. We instead represent GF(q^n) as GF(q)[x]/(x^n - c) for a
+    small twist c, and draw each coefficient from a small range — the
+    resulting matrix's entries ARE those small coefficients (see
+    `_twisted_circulant`), so beta stays low-norm the same way H1's R does.
     """
     n, m, q = params.n, params.m, params.q
     repeats = m // n
 
     seed = _seed_from(w.encode(), str(j).encode(), b"H2")
     rng = random.Random(seed)
-    a = np.array([rng.randrange(q) for _ in range(n)], dtype=np.int64)
+    a = [rng.randrange(H2_COEFF_RANGE) for _ in range(n)]
+    if not any(a):
+        a[0] = 1  # avoid the degenerate zero field element (beta must be invertible)
 
-    C = _irreducible_companion(n, q)
-    powers = _companion_power_basis(C, q)
-    M_small = np.zeros((n, n), dtype=np.int64)
-    for i in range(n):
-        M_small = (M_small + a[i] * powers[i]) % q
+    c = _irreducible_twist(n, q)
+    M_small = _twisted_circulant(a, c, q)
 
     beta = np.zeros((m, m), dtype=np.int64)
     for r in range(repeats):
         beta[r * n:(r + 1) * n, r * n:(r + 1) * n] = M_small
 
     if trace is not None:
+        from .linalg import matrix_col_norm
         trace.correction(
-            "H2(w, j) instantiated as an FRD encoding",
+            "H2(w, j) instantiated as a LOW-NORM FRD encoding",
             paper_says="H2: {0,1}^l1 x N -> Z_q^{m x m}, no construction given, "
-                       "yet the scheme inverts beta_j and needs FRD differences "
-                       "for the security reduction.",
-            we_do="H2(w,j) maps (w,j) to a field element a in GF(q^n) (via SHA256), "
-                  "represents 'multiply by a' as an n x n companion matrix over a "
-                  "fixed irreducible polynomial, then block-diagonally repeats it "
-                  "m/n times to reach the required m x m shape (a documented "
-                  "approximation of a full m-dimensional FRD map).",
-            because="GF(q^n) is a field, so for a != a' the difference a-a' is "
-                    "a nonzero field element and multiplication by it is a "
-                    "bijection -> its matrix is invertible. Repeating an "
-                    "invertible n x n block along the diagonal keeps the whole "
-                    "m x m difference invertible (block-diagonal determinant is "
-                    "the product of block determinants).",
-            data={"shape": [m, m], "field_degree": n, "blocks_repeated": repeats},
+                       "yet the scheme inverts beta_j and reuses it inside "
+                       "NewBasisDel (Trapdoor, §3.6) exactly where KeyExt uses H1's R.",
+            we_do="H2(w,j) maps (w,j) to a small-coefficient field element a "
+                  "in GF(q)[x]/(x^n - c) (c found by search, small), represents "
+                  "'multiply by a' as a twisted-circulant n x n matrix whose "
+                  "entries ARE the small coefficients, then block-diagonally "
+                  "repeats it m/n times to reach the required m x m shape.",
+            because="Being used inside NewBasisDel means beta needs the SAME "
+                    "low-norm property H1's R needs — a full companion-matrix "
+                    "FRD is invertible-difference but has entries spread across "
+                    "all of Z_q, which (empirically) blows Trap's norm past the "
+                    "q/4 decode threshold and breaks Verify's correctness at "
+                    "these toy parameters. GF(q^n) is still a field here, so "
+                    "for a != a' the difference is a nonzero field element and "
+                    "multiplication by it is still a bijection -> still invertible.",
+            data={"shape": [m, m], "field_degree": n, "blocks_repeated": repeats,
+                  "twist_c": c, "beta_col_norm": matrix_col_norm(beta)},
             algo="H2",
         )
     return beta

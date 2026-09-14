@@ -140,13 +140,20 @@ def new_basis_del(
     # live demo.
     chosen: list[np.ndarray] = []
     ortho: list[np.ndarray] = []  # orthonormal frame spanning span(chosen)
-    eps = 1e-6
+    rel_eps = 1e-6
     for v in candidates:
-        r = v.astype(float)
+        vf = v.astype(float)
+        vnorm = float(np.linalg.norm(vf))
+        r = vf.copy()
         for u in ortho:
             r = r - float(np.dot(r, u)) * u
         rn = float(np.linalg.norm(r))
-        if rn > eps:
+        # Threshold RELATIVE to the candidate's own scale: entries here run
+        # into the hundreds, so a fixed absolute eps lets floating-point
+        # round-off admit a nearly-dependent vector, which then produces a
+        # basis with a near-zero Gram-Schmidt length -> klein_sample's
+        # sigma/||b*|| blows up and discrete_gaussian_1d effectively hangs.
+        if rn > rel_eps * max(vnorm, 1.0):
             chosen.append(v)
             ortho.append(r / rn)
         if len(chosen) == m:

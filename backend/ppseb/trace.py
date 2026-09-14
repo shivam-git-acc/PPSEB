@@ -91,12 +91,11 @@ class Trace:
     def compute(self, title, detail="", data=None, algo="", highlight=False):
         return self.emit("compute", title, detail, data, algo, highlight)
 
-    def correction(self, title, paper_says, we_do, because, detail="", algo="", highlight=True):
-        return self.emit(
-            "correction", title, detail,
-            {"paper_says": paper_says, "we_do": we_do, "because": because},
-            algo, highlight,
-        )
+    def correction(self, title, paper_says, we_do, because, detail="", data=None, algo="", highlight=True):
+        payload = {"paper_says": paper_says, "we_do": we_do, "because": because}
+        if data:
+            payload.update(data)
+        return self.emit("correction", title, detail, payload, algo, highlight)
 
     def note(self, title, detail="", data=None, algo="", highlight=False):
         return self.emit("note", title, detail, data, algo, highlight)
