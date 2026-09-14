@@ -32,7 +32,9 @@ import random
 import numpy as np
 
 from ppseb.hashes import H1, H1_inverse
-from ppseb.linalg import centered_mod_q, gram_schmidt_norm, mat_inv_mod, matrix_col_norm
+from ppseb.linalg import (
+    centered_mod_q, gram_schmidt_norm, mat_inv_mod, mat_mod_mixed, matrix_col_norm, safe_matmul,
+)
 from ppseb.params import Params
 from ppseb.samplers import new_basis_del
 from ppseb.trace import Trace
@@ -70,7 +72,10 @@ def _build_chain(J: int, params: Params, rng: np.random.Generator, pyrng: random
     for j in range(1, J + 1):
         if h1_variant == "low_norm":
             R = H1(pk, j, params)
-            R_inv = H1_inverse(R) % q
+            # H1_inverse's exact (pre-reduction) values can be `object`
+            # dtype; once reduced mod q every entry is small, so normalize
+            # back to int64 to avoid a mixed int64/object matmul below.
+            R_inv = np.array([[int(x) for x in row] for row in (H1_inverse(R) % q)], dtype=np.int64)
         elif h1_variant == "naive_uniform":
             R, R_inv = _uniform_invertible(pk, j, params, seed=hash((tuple(pk.flatten().tolist()), j)) & 0xFFFFFFFF)
         else:
@@ -78,7 +83,7 @@ def _build_chain(J: int, params: Params, rng: np.random.Generator, pyrng: random
 
         pk_new = (pk @ R_inv) % q
         sk_new = new_basis_del(pk, R, sk, params.sigma, q, pyrng, R_inv=R_inv)
-        ok = bool(np.all((pk_new @ sk_new) % q == 0))
+        ok = bool(np.all(mat_mod_mixed(pk_new, sk_new, q) == 0))
         chain.append({"j": j, "pk": pk_new, "sk": sk_new, "valid": ok})
         trace.compute(
             f"KeyExt period {j} ({h1_variant})",
@@ -137,8 +142,8 @@ def forward_sec_experiment(J: int, params: Params, seed: int = 0, h1_variant: st
     rows = []
     for i in range(J):
         P_inv_centered = centered_mod_q(suffix[i], q)
-        cand = P_inv_centered @ target  # exact integer product; membership holds mod q
-        membership_ok = bool(np.all((chain[i]["pk"] @ cand) % q == 0))
+        cand = safe_matmul(P_inv_centered, target)  # exact integer product; membership holds mod q
+        membership_ok = bool(np.all(mat_mod_mixed(chain[i]["pk"], cand, q) == 0))
         cand_norm = gram_schmidt_norm(cand)
         legit_norm = gram_schmidt_norm(chain[i]["sk"])
 

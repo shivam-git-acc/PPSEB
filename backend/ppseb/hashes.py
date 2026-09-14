@@ -17,7 +17,7 @@ import random
 import numpy as np
 from sympy.polys.domains import ZZ
 
-from .linalg import mat_inv_mod
+from .linalg import mat_inv_mod, to_safe_int_array
 from .params import Params
 from .trace import Trace
 
@@ -70,7 +70,16 @@ def H1_inverse(R: np.ndarray) -> np.ndarray:
     """Exact integer inverse of a unit-upper-triangular matrix R = I + N via
     back substitution (no division needed: R's diagonal is 1, so every step
     is an exact integer subtraction). Since det(R) = 1, this exact integer
-    inverse IS the inverse mod any q too (just reduce it mod q)."""
+    inverse IS the inverse mod any q too (just reduce it mod q).
+
+    Back-substituting a random +/-1 upper-triangular matrix can (rarely, but
+    in principle) produce entries that grow much faster than the input size
+    suggests — worst case exponentially in m. Computation is kept exact via
+    `object` (arbitrary-precision) throughout; only the *returned* array is
+    opportunistically downcast to int64, and only when every entry actually
+    fits (see `to_safe_int_array`), so a pathological R can't silently
+    overflow into a wrong mod-q inverse.
+    """
     m = R.shape[0]
     Rint = R.astype(object)
     Rinv = np.zeros((m, m), dtype=object)
@@ -82,7 +91,7 @@ def H1_inverse(R: np.ndarray) -> np.ndarray:
             x[row] = s  # divide by R[row,row] == 1
         for row in range(m):
             Rinv[row, col] = x[row]
-    return Rinv.astype(np.int64)
+    return to_safe_int_array(Rinv)
 
 
 # --------------------------------------------------------------------------

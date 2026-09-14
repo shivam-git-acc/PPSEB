@@ -21,7 +21,7 @@ import random
 import numpy as np
 
 from ppseb.hashes import H1
-from ppseb.linalg import gram_schmidt_norm
+from ppseb.linalg import gram_schmidt_norm, mat_mod_mixed
 from ppseb.params import Params
 from ppseb.samplers import new_basis_del
 from ppseb.scheme import keyext
@@ -141,12 +141,12 @@ def run_corrected_version(J: int, params: Params, seed: int = 0) -> dict:
     rng = np.random.default_rng(seed)
     pyrng = random.Random(seed)
     pk0, sk0 = trapgen(params, rng)
-    chain = [{"period": 0, "pk": pk0, "sk": sk0, "valid": bool(np.all((pk0 @ sk0) % params.q == 0))}]
+    chain = [{"period": 0, "pk": pk0, "sk": sk0, "valid": bool(np.all(mat_mod_mixed(pk0, sk0, params.q) == 0))}]
 
     pk, sk = pk0, sk0
     for j in range(1, J + 1):
         pk, sk = keyext(j, pk, sk, params, pyrng)
-        ok = bool(np.all((pk @ sk) % params.q == 0))
+        ok = bool(np.all(mat_mod_mixed(pk, sk, params.q) == 0))
         chain.append({"period": j, "pk": pk, "sk": sk, "valid": ok})
 
     all_valid = all(entry["valid"] for entry in chain)

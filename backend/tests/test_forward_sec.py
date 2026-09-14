@@ -24,3 +24,18 @@ def test_forward_sec_naive_uniform_variant_runs():
     assert len(result["rows"]) == 2
     for row in result["rows"]:
         assert row["membership_ok"] is True
+
+
+def test_forward_sec_naive_uniform_survives_larger_J():
+    """Regression test: at J>=~7 the naive-uniform H1 comparison's basis
+    entries exceed int64 range (silent overflow used to corrupt the mod-q
+    identity) and, separately, used to exceed float64's precision in the
+    re-randomization independence test (wrongly rejecting valid candidates).
+    Both bugs manifested as a spurious RuntimeError from new_basis_del.
+    """
+    p = default_params()
+    result = forward_sec_experiment(J=10, params=p, seed=1, h1_variant="naive_uniform")
+    assert len(result["rows"]) == 10
+    for row in result["rows"]:
+        assert row["membership_ok"] is True
+        assert row["candidate_gram_schmidt_norm"] > 0

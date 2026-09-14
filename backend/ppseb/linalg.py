@@ -141,6 +141,64 @@ def kernel_basis_mod_q(
 
 
 # --------------------------------------------------------------------------
+# Overflow-safe integer arrays
+# --------------------------------------------------------------------------
+
+# A basis produced by *low-norm* delegation (H1's I+N) stays comfortably
+# inside int64 for any J we'd realistically demo. But Finding 2 deliberately
+# also runs a "naive uniform-invertible" H1 for comparison (CLAUDE.md §4:
+# "run it under BOTH H1 instantiations"), and THAT one has no norm bound at
+# all: its Gram-Schmidt norm was observed to grow ~600x per period, so by
+# ~7-8 chained periods entries exceed int64's ~9.2e18 range. numpy int64
+# overflow wraps silently (no exception) rather than raising, which then
+# corrupts the exact "A.T = 0 (mod q)" identity these functions depend on —
+# that silent corruption, not a logic bug in the delegation math, is what
+# produced a spurious "NewBasisDel produced an invalid basis" failure at
+# J=8 with the naive variant. Fix: any matrix that isn't already reduced mod
+# q (a lattice basis's entries aren't — they must be actual short-ish
+# integers, not residues) is kept in `object` dtype (arbitrary-precision
+# Python ints) end to end, only downcast to int64 when it's provably safe.
+INT64_SAFE_BOUND = 2**62  # comfortable margin below int64's ~9.2e18 max
+
+
+def to_safe_int_array(M: np.ndarray) -> np.ndarray:
+    """Return M as int64 if every entry fits comfortably in int64, else as
+    `object` (arbitrary-precision Python ints, no overflow risk)."""
+    obj = M.astype(object)
+    max_abs = 0
+    it = obj.flat
+    for x in it:
+        ax = x if x >= 0 else -x
+        if ax > max_abs:
+            max_abs = ax
+        if max_abs > INT64_SAFE_BOUND:
+            return obj
+    return obj.astype(np.int64)
+
+
+def safe_matmul(A: np.ndarray, B: np.ndarray) -> np.ndarray:
+    """A @ B, done in `object` (arbitrary-precision) arithmetic.
+
+    This is intentionally NOT conditional on A/B already being object-dtype.
+    An earlier version only promoted when an operand was already object,
+    reasoning that "if both fit in int64, the product does too" — that's
+    wrong: int64 matmul's internal accumulation can overflow even when every
+    individual entry of A and B fits comfortably in int64 (e.g. summing ~70
+    products of two ~1e17 values overflows int64's ~9.2e18 range, even
+    though 1e17 alone does not). That silent wraparound is exactly what
+    produced a spurious "NewBasisDel produced an invalid basis" failure for
+    Finding 2's naive-uniform H1 comparison at J~6-8. Always promoting is the
+    only way to be sure; it costs some speed, never correctness.
+    """
+    return A.astype(object) @ B.astype(object)
+
+
+def mat_mod_mixed(A: np.ndarray, B: np.ndarray, q: int) -> np.ndarray:
+    """(A @ B) % q — see `safe_matmul`."""
+    return safe_matmul(A, B) % q
+
+
+# --------------------------------------------------------------------------
 # Norms / Gram-Schmidt
 # --------------------------------------------------------------------------
 
@@ -237,7 +295,8 @@ def lll_reduce(B: np.ndarray, delta: float = 0.75, max_steps: int = 200_000) -> 
             recompute(kk - 1)
             recompute(kk)
             kk = max(kk - 1, 1)
-    return np.array([[int(x) for x in col] for col in basis], dtype=np.int64).T
+    result = np.array([[int(x) for x in col] for col in basis], dtype=object).T
+    return to_safe_int_array(result)
 
 
 # --------------------------------------------------------------------------
@@ -255,6 +314,79 @@ def real_rank(M: np.ndarray) -> int:
     if M.shape[1] == 0:
         return 0
     return int(np.linalg.matrix_rank(M.astype(float)))
+
+
+class ExactIndependenceTracker:
+    """Incrementally tracks linear independence of integer vectors over Q,
+    via exact Gaussian elimination modulo one large random prime P — not
+    over Q with `fractions.Fraction`, and not via floating-point.
+
+    Why not float: `real_rank`'s SVD (and an earlier float Gram-Schmidt used
+    here) both lose precision once vector entries span a huge dynamic range
+    — exactly what happens after several chained NewBasisDel calls under a
+    non-low-norm R (Finding 2's naive-uniform H1 comparison; entries exceed
+    1e17 by period 6-8). That precision loss wrongly rejected genuinely-
+    independent candidates, so a from-scratch greedy build came up short of
+    a full-rank set even though a valid one (S's own columns) was sitting
+    right there in the candidate pool.
+
+    Why not exact fractions.Fraction: correct, but numerator/denominator
+    size compounds across eliminations, and for m~72 with huge inputs this
+    was ~2x slower than the whole rest of NewBasisDel combined.
+
+    Reducing mod a single large (61-bit) random prime is the standard
+    practical middle ground: arithmetic is exact (Python's big-int mod, no
+    precision loss) and bounded-size (everything stays < P), and it gives
+    the TRUE rank over Q unless P happens to divide a relevant sub-
+    determinant of the input — vanishingly unlikely for a randomly chosen
+    61-bit P. (Even in that astronomical-odds case, the caller still
+    verifies the final delegated basis satisfies A.T=0 mod q explicitly, so
+    this is a performance/engineering choice, not a soundness gap.)
+    """
+
+    def __init__(self, dim: int, rng: random.Random | None = None) -> None:
+        self.dim = dim
+        rng = rng or random
+        self.P = _large_prime(rng)
+        self._pivot_cols: list[int] = []
+        self._rows: list[list[int]] = []  # reduced-row-echelon rows, mod P
+
+    def try_add(self, v: np.ndarray) -> bool:
+        """Reduce v (mod P) against the current echelon rows. If it's
+        independent of them, add it (in reduced form) and return True."""
+        P = self.P
+        row = [int(x) % P for x in v]
+        for pivot_col, erow in zip(self._pivot_cols, self._rows):
+            if row[pivot_col] != 0:
+                factor = row[pivot_col]
+                row = [(r - factor * e) % P for r, e in zip(row, erow)]
+        for idx, val in enumerate(row):
+            if val != 0:
+                inv = pow(val, P - 2, P)
+                row = [(r * inv) % P for r in row]
+                self._pivot_cols.append(idx)
+                self._rows.append(row)
+                return True
+        return False
+
+    @property
+    def count(self) -> int:
+        return len(self._rows)
+
+
+# Four verified 61-bit primes (sympy.isprime-checked) to pick from at random
+# per NewBasisDel call, so an unlucky choice for one basis doesn't repeat
+# for another.
+_LARGE_PRIMES = (
+    2**61 - 1,       # Mersenne prime
+    2305843009213693967,
+    2305843009213693973,
+    2305843009213694009,
+)
+
+
+def _large_prime(rng: random.Random) -> int:
+    return rng.choice(_LARGE_PRIMES)
 
 
 def rank_mod_q(M: np.ndarray, q: int) -> int:
@@ -350,7 +482,11 @@ def klein_sample(
         zi = discrete_gaussian_1d(ci, sigma_i, rng)
         z[i] = zi
         c = c - zi * basis[:, i].astype(float)
-    v = np.zeros(m, dtype=np.int64)
+    # dtype=object: z_i * basis[:,i] can overflow int64 when `basis` itself
+    # isn't norm-bounded (e.g. Finding 2's naive-uniform H1 comparison) —
+    # see the note above `to_safe_int_array`. Downcast at the end if safe.
+    v = np.zeros(m, dtype=object)
+    basis_obj = basis.astype(object)
     for i in range(k):
-        v += z[i] * basis[:, i]
-    return v
+        v += int(z[i]) * basis_obj[:, i]
+    return to_safe_int_array(v)

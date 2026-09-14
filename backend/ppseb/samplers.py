@@ -13,13 +13,16 @@ import random
 import numpy as np
 
 from .linalg import (
+    ExactIndependenceTracker,
     find_full_rank_partition,
     gram_schmidt,
     gram_schmidt_norm,
     klein_sample,
     lll_reduce,
     mat_inv_mod,
+    mat_mod_mixed,
     particular_solution,
+    to_safe_int_array,
 )
 from .trace import Trace
 
@@ -54,8 +57,8 @@ def sample_pre(
     partition = find_full_rank_partition(A, q)
     t0 = particular_solution(A, v, q, partition)
     perturb = klein_sample(T_A, -t0.astype(float), sigma, rng)
-    w = (t0 + perturb)
-    ok = bool(np.all((A @ w) % q == v % q))
+    w = to_safe_int_array(t0.astype(object) + perturb.astype(object))
+    ok = bool(np.all(mat_mod_mixed(A, w, q) == v % q))
     if trace is not None:
         trace.compute(
             "SamplePre: found a particular solution t0",
@@ -107,12 +110,18 @@ def new_basis_del(
         R_inv = mat_inv_mod(R, q)  # generic fallback (slow for m~70; callers
                                     # that know R = H1(...) should pass the
                                     # fast H1_inverse(R) % q instead)
+    # R_inv is always mod-q reduced (bounded in [0, q)) by every caller, but
+    # its dtype may still be `object` if it came from H1_inverse's exact
+    # (possibly huge, pre-reduction) computation — normalize to int64 now
+    # that the values themselves are small, so the matmul below isn't a
+    # mixed-dtype one.
+    R_inv = np.array([[int(x) for x in row] for row in R_inv], dtype=np.int64)
     A_R = (A @ R_inv) % q
 
     S = (R.astype(object) @ T_A.astype(object))
-    S_int = np.array([[int(x) for x in row] for row in S], dtype=np.int64)
-    s_ok = bool(np.all((A_R @ S_int) % q == 0))
-    s_norm = gram_schmidt_norm(S_int)
+    S_safe = to_safe_int_array(S)
+    s_ok = bool(np.all(mat_mod_mixed(A_R, S_safe, q) == 0))
+    s_norm = gram_schmidt_norm(S_safe)
 
     if trace is not None:
         trace.compute(
@@ -122,11 +131,11 @@ def new_basis_del(
             algo="NewBasisDel",
         )
 
-    Bstar_S, _mu = gram_schmidt(S_int)
+    Bstar_S, _mu = gram_schmidt(S_safe)
     zero_center = np.zeros(m)
-    candidates: list[np.ndarray] = [S_int[:, i] for i in range(m)]
+    candidates: list[np.ndarray] = [S_safe[:, i] for i in range(m)]
     candidates += [
-        klein_sample(S_int, zero_center, sigma, rng, Bstar=Bstar_S)
+        klein_sample(S_safe, zero_center, sigma, rng, Bstar=Bstar_S)
         for _ in range(resample_factor * m)
     ]
     candidates.sort(key=lambda v: float(np.dot(v.astype(float), v.astype(float))))
@@ -134,37 +143,29 @@ def new_basis_del(
     # Greedily keep the shortest candidates that are linearly independent
     # (over Q — a basis of L_perp_q(A) always has det +/- q^n, so rank *mod q*
     # is the wrong test here; see linalg.real_rank). Independence is tested
-    # via incremental Gram-Schmidt against an orthonormal frame for the
-    # chosen set so far — O(m) per candidate instead of an O(m^3) rank/SVD
-    # call, which is what keeps chained NewBasisDel calls fast enough for a
-    # live demo.
+    # via exact modular Gaussian elimination over one large random prime
+    # (see ExactIndependenceTracker) rather than a floating-point
+    # Gram-Schmidt: S's own columns are guaranteed independent by
+    # construction (S = R.T_A for invertible R, full-rank T_A), but a
+    # float-based test can lose enough precision on huge, wildly-scaled
+    # entries (Finding 2's naive-uniform H1 comparison; entries exceed 1e17
+    # by period ~7) to wrongly reject some of them — leaving the greedy
+    # build short of m vectors even though a valid set was in the pool all
+    # along.
+    tracker = ExactIndependenceTracker(m, rng)
     chosen: list[np.ndarray] = []
-    ortho: list[np.ndarray] = []  # orthonormal frame spanning span(chosen)
-    rel_eps = 1e-6
     for v in candidates:
-        vf = v.astype(float)
-        vnorm = float(np.linalg.norm(vf))
-        r = vf.copy()
-        for u in ortho:
-            r = r - float(np.dot(r, u)) * u
-        rn = float(np.linalg.norm(r))
-        # Threshold RELATIVE to the candidate's own scale: entries here run
-        # into the hundreds, so a fixed absolute eps lets floating-point
-        # round-off admit a nearly-dependent vector, which then produces a
-        # basis with a near-zero Gram-Schmidt length -> klein_sample's
-        # sigma/||b*|| blows up and discrete_gaussian_1d effectively hangs.
-        if rn > rel_eps * max(vnorm, 1.0):
+        if tracker.try_add(v):
             chosen.append(v)
-            ortho.append(r / rn)
         if len(chosen) == m:
             break
     if len(chosen) < m:
         # Should not happen (S alone is already full rank); fail loudly.
         raise RuntimeError("NewBasisDel: re-randomization failed to reach full rank")
 
-    T_raw = np.array(chosen, dtype=np.int64).T
+    T_raw = to_safe_int_array(np.array([np.asarray(v, dtype=object) for v in chosen], dtype=object).T)
     T_new = lll_reduce(T_raw)
-    ok = bool(np.all((A_R @ T_new) % q == 0))
+    ok = bool(np.all(mat_mod_mixed(A_R, T_new, q) == 0))
     new_norm = gram_schmidt_norm(T_new)
 
     if trace is not None:

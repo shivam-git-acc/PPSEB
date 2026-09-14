@@ -11,7 +11,7 @@ import random
 import numpy as np
 
 from .hashes import H1, H1_inverse, H2, H2_inverse
-from .linalg import mat_inv_mod
+from .linalg import mat_inv_mod, mat_mod_mixed, safe_matmul
 from .params import Params
 from .samplers import new_basis_del, sample_pre
 from .trace import Trace
@@ -102,11 +102,15 @@ def keyext(
 
     R = H1(pk_prev, j, params, trace)
     R_inv_exact = H1_inverse(R)
-    R_inv = R_inv_exact % params.q
+    # Mod-reduce, then normalize dtype: R_inv_exact may still be `object`
+    # dtype (H1_inverse's exact pre-reduction values can be large), but once
+    # reduced mod q every entry is small, so it's safe (and needed, to avoid
+    # a mixed int64/object matmul) to bring it back to int64 here.
+    R_inv = np.array([[int(x) for x in row] for row in (R_inv_exact % params.q)], dtype=np.int64)
     pk_j = (pk_prev @ R_inv) % params.q
     sk_j = new_basis_del(pk_prev, R, sk_prev, params.sigma, params.q, rng, trace, R_inv=R_inv)
 
-    ok = bool(np.all((pk_j @ sk_j) % params.q == 0))
+    ok = bool(np.all(mat_mod_mixed(pk_j, sk_j, params.q) == 0))
     if trace is not None:
         trace.decision(
             f"KeyExt period {j}: verified pk_{j} . sk_{j} = 0 (mod q)",
@@ -203,7 +207,7 @@ def trapdoor(
 
 def verify(CT1: np.ndarray, CT2: np.ndarray, Trap: np.ndarray, params: Params, trace: Trace | None = None) -> tuple[bool, np.ndarray]:
     q = params.q
-    y = (CT1 - Trap @ CT2) % q
+    y = (CT1 - safe_matmul(Trap, CT2)) % q
     half_q = q // 2
     centered_dist = np.minimum(np.abs(y - half_q), q - np.abs(y - half_q))
     threshold = q // 4
@@ -274,7 +278,8 @@ def decrypt_record(
     C1, C2, num_bytes = ciphertext["C1"], ciphertext["C2"], ciphertext["num_bytes"]
     half_q = q // 2
 
-    vals = (C2 - (C1 @ t0)) % q
+    vals = (C2 - safe_matmul(C1, t0)) % q
+    vals = vals.astype(np.int64)
     dist_to_0 = np.minimum(vals, q - vals)
     dist_to_half = np.abs(vals - half_q)
     bits = (dist_to_half < dist_to_0).astype(np.uint8)

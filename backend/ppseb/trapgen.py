@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from .linalg import find_full_rank_partition, gram_schmidt_norm, kernel_basis_mod_q, lll_reduce
+from .linalg import find_full_rank_partition, gram_schmidt_norm, kernel_basis_mod_q, lll_reduce, mat_mod_mixed
 from .params import Params
 from .trace import Trace
 
@@ -59,7 +59,7 @@ def trapgen(params: Params, rng: np.random.Generator, trace: Trace | None = None
 
     T = lll_reduce(T_raw)
     reduced_norm = gram_schmidt_norm(T)
-    ok = bool(np.all((A @ T) % q == 0))
+    ok = bool(np.all(mat_mod_mixed(A, T, q) == 0))
 
     if trace is not None:
         trace.norm(
