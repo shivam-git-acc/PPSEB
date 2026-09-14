@@ -6,7 +6,8 @@ import { api } from "../api";
 import { Card, Badge, PrimaryButton, ErrorBanner } from "../components/Section";
 
 function verdictTone(v) {
-  if (v.startsWith("BROKEN")) return v.includes("weak") ? "amber" : "red";
+  if (v === "BROKEN (trivial)") return "red";
+  if (v === "BROKEN (after LLL reduction)") return "amber";
   if (v.startsWith("survives")) return "green";
   return "neutral";
 }
@@ -35,7 +36,8 @@ export default function ForwardSecTab({ onTrace, initialized }) {
   const chartData = result?.rows.map((r) => ({
     name: `period ${r.period}`,
     legit: r.legit_gram_schmidt_norm,
-    candidate: r.candidate_gram_schmidt_norm,
+    trivial: r.candidate_trivial_gram_schmidt_norm,
+    afterLll: r.candidate_after_lll_gram_schmidt_norm,
   })) ?? [];
 
   return (
@@ -44,9 +46,11 @@ export default function ForwardSecTab({ onTrace, initialized }) {
         <p className="text-sm text-ink-300 leading-relaxed">
           Stealing the CURRENT trapdoor sk_rJ must not reveal any EARLIER sk_ri. Consecutive
           periods are related by a public low-norm R, so a candidate for any earlier basis is
-          computable from public data alone plus the stolen sk_rJ — always. Forward security
-          reduces to whether that candidate is short enough to be usable. The verdict below is
-          <b> derived from the measured norms</b>, never assumed.
+          computable from public data alone plus the stolen sk_rJ — always. Every candidate is
+          measured twice: once as a plain balanced representative (entries mapped into
+          (-q/2, q/2], since only residues mod q are meaningful), then again after LLL-reducing
+          it — the same finishing step NewBasisDel itself applies. The verdict below is
+          <b> derived from those measured norms</b>, never assumed.
         </p>
       </Card>
 
@@ -75,7 +79,7 @@ export default function ForwardSecTab({ onTrace, initialized }) {
 
       {result && (
         <>
-          <Card title="Norm comparison" subtitle="legit basis vs attacker's recovered candidate vs usability threshold (log scale)">
+          <Card title="Norm comparison" subtitle="legit basis vs attacker's candidate — trivial (balanced) and after LLL re-reduction — vs usability threshold (log scale)">
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#242c38" />
@@ -86,7 +90,8 @@ export default function ForwardSecTab({ onTrace, initialized }) {
                 <ReferenceLine y={result.rows[0]?.usability_threshold} stroke="#f2685c" strokeDasharray="4 3"
                   label={{ value: "usability threshold (q/4)", position: "insideTopRight", fill: "#f2685c", fontSize: 10 }} />
                 <Bar dataKey="legit" name="legit ‖GS(sk_ri)‖" fill="#3ecf8e" />
-                <Bar dataKey="candidate" name="attacker ‖GS(cand_i)‖" fill="#f2b544" />
+                <Bar dataKey="trivial" name="candidate, trivial (balanced)" fill="#94a1b3" />
+                <Bar dataKey="afterLll" name="candidate, after LLL reduction" fill="#f2b544" />
               </BarChart>
             </ResponsiveContainer>
           </Card>
@@ -99,7 +104,8 @@ export default function ForwardSecTab({ onTrace, initialized }) {
                     <th className="pb-2 pr-4">period</th>
                     <th className="pb-2 pr-4">periods back</th>
                     <th className="pb-2 pr-4">legit ‖GS‖</th>
-                    <th className="pb-2 pr-4">candidate ‖GS‖</th>
+                    <th className="pb-2 pr-4">candidate ‖GS‖ (trivial)</th>
+                    <th className="pb-2 pr-4">candidate ‖GS‖ (after LLL)</th>
                     <th className="pb-2 pr-4">in lattice?</th>
                     <th className="pb-2">verdict</th>
                   </tr>
@@ -110,7 +116,8 @@ export default function ForwardSecTab({ onTrace, initialized }) {
                       <td className="py-1.5 pr-4">{r.period}</td>
                       <td className="py-1.5 pr-4">{r.periods_back}</td>
                       <td className="py-1.5 pr-4">{r.legit_gram_schmidt_norm.toFixed(2)}</td>
-                      <td className="py-1.5 pr-4">{r.candidate_gram_schmidt_norm.toFixed(2)}</td>
+                      <td className="py-1.5 pr-4">{r.candidate_trivial_gram_schmidt_norm.toFixed(2)}</td>
+                      <td className="py-1.5 pr-4">{r.candidate_after_lll_gram_schmidt_norm.toFixed(2)}</td>
                       <td className="py-1.5 pr-4">{String(r.membership_ok)}</td>
                       <td className="py-1.5"><Badge tone={verdictTone(r.verdict)}>{r.verdict}</Badge></td>
                     </tr>

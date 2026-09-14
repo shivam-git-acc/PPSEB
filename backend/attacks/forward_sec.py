@@ -18,7 +18,39 @@ and H1 are public) plus the one stolen sk_rJ. Forward security therefore
 reduces entirely to a norm question: is cand_i short enough to actually WORK
 as a trapdoor?
 
-**Honesty requirement (CLAUDE.md §4, Finding 2):** the verdict below is
+**R^-1 audit (over Z vs mod q):** each R_j = H1(...) = I + N has det = 1
+EXACTLY over Z, so it has a genuine integer inverse (linalg.H1_inverse, via
+back-substitution — no division ever needed). We build P^-1 by chaining the
+mod-q reductions of those exact inverses one step at a time. That's
+mathematically forced to agree with "multiply the exact-over-Z inverses
+together first, reduce the product mod q once at the end" — mod-q reduction
+is a ring homomorphism, so it doesn't matter when you apply it — and we
+verified this by direct comparison (see test_forward_sec.py); the two
+computations agree on every entry. There is no over-Z-vs-mod-q discrepancy
+to fix here (for the naive-uniform comparison variant, "over Z" doesn't even
+apply: a uniformly random matrix mod q has no reason to have determinant
++/-1 over Z, so it has no integer inverse at all — only a mod-q one).
+
+**The artifact that DID need fixing — balanced representatives:** `cand_i`'s
+entries only need to be correct MOD q (matrix-vector reduction mod q depends
+only on residues), so any two representatives of the same residue describe
+the identical lattice point. The raw product P^-1_centered @ sk_rJ, left
+un-reduced, can have enormous entries with no cryptographic meaning — just
+an artifact of which representative happened to fall out of the
+multiplication. Every entry is remapped to (-q/2, q/2] (`centered_mod_q`)
+before any norm is measured.
+
+**The experiment that actually answers the question — LLL re-reduction:**
+a balanced-but-unreduced cand_i is *some* valid basis of L_perp_q(pk_ri), not
+necessarily a good one. The honest question is what the attacker gets after
+doing the same thing our own NewBasisDel does: LLL-reduce it. So every
+candidate is measured twice — trivially (balanced, no further work) and
+after LLL — giving three possible, HONEST verdicts per period:
+  - "BROKEN (trivial)"            — already short before any reduction.
+  - "BROKEN (after LLL reduction)" — short only once LLL is applied.
+  - "survives both"                — still not short even after LLL.
+
+**Honesty requirement (CLAUDE.md §4, Finding 2):** every verdict below is
 DERIVED from measured Gram-Schmidt norms, never hard-coded. We run this under
 two H1 instantiations — the low-norm I+N construction (hashes.H1) and a
 naive uniform-invertible one — to show the result depends on a distribution
@@ -33,7 +65,8 @@ import numpy as np
 
 from ppseb.hashes import H1, H1_inverse
 from ppseb.linalg import (
-    centered_mod_q, gram_schmidt_norm, mat_inv_mod, mat_mod_mixed, matrix_col_norm, safe_matmul,
+    centered_mod_q, gram_schmidt_norm, lll_reduce, mat_inv_mod, mat_mod_mixed, matrix_col_norm,
+    safe_matmul,
 )
 from ppseb.params import Params
 from ppseb.samplers import new_basis_del
@@ -138,29 +171,42 @@ def forward_sec_experiment(J: int, params: Params, seed: int = 0, h1_variant: st
         suffix[i] = (R_invs[i] @ suffix[i + 1]) % q
 
     usability_threshold = q // 4
-    close_factor = 3.0  # "about as good as the real thing" cutoff
     rows = []
     for i in range(J):
         P_inv_centered = centered_mod_q(suffix[i], q)
-        cand = safe_matmul(P_inv_centered, target)  # exact integer product; membership holds mod q
-        membership_ok = bool(np.all(mat_mod_mixed(chain[i]["pk"], cand, q) == 0))
-        cand_norm = gram_schmidt_norm(cand)
+        cand_raw = safe_matmul(P_inv_centered, target)  # exact integer product; membership holds mod q regardless of representative
+
+        # Balanced representative: entries only matter mod q, so remap every
+        # one into (-q/2, q/2] before measuring anything — an un-reduced
+        # entry is an artifact of the multiplication, not a real quantity.
+        cand_trivial = centered_mod_q(cand_raw, q)
+        trivial_ok = bool(np.all(mat_mod_mixed(chain[i]["pk"], cand_trivial, q) == 0))
+        trivial_norm = gram_schmidt_norm(cand_trivial)
+
+        # The actual question: what does the attacker get after doing the
+        # same thing our own NewBasisDel does — LLL-reduce it?
+        cand_lll = lll_reduce(cand_trivial)
+        lll_ok = bool(np.all(mat_mod_mixed(chain[i]["pk"], cand_lll, q) == 0))
+        lll_norm = gram_schmidt_norm(cand_lll)
+
         legit_norm = gram_schmidt_norm(chain[i]["sk"])
+        membership_ok = trivial_ok and lll_ok
 
         if not membership_ok:
             verdict = "NOT IN LATTICE (unexpected)"
-        elif cand_norm <= close_factor * legit_norm:
-            verdict = "BROKEN"
-        elif cand_norm < usability_threshold:
-            verdict = "BROKEN (weak)"
+        elif trivial_norm < usability_threshold:
+            verdict = "BROKEN (trivial)"
+        elif lll_norm < usability_threshold:
+            verdict = "BROKEN (after LLL reduction)"
         else:
-            verdict = "survives trivial attack"
+            verdict = "survives both"
 
         rows.append({
             "period": i,
             "periods_back": J - i,
             "legit_gram_schmidt_norm": legit_norm,
-            "candidate_gram_schmidt_norm": cand_norm,
+            "candidate_trivial_gram_schmidt_norm": trivial_norm,
+            "candidate_after_lll_gram_schmidt_norm": lll_norm,
             "usability_threshold": usability_threshold,
             "membership_ok": membership_ok,
             "verdict": verdict,
@@ -170,10 +216,12 @@ def forward_sec_experiment(J: int, params: Params, seed: int = 0, h1_variant: st
             verdict=verdict,
             evidence={
                 "legit_gram_schmidt_norm": legit_norm,
-                "candidate_gram_schmidt_norm": cand_norm,
+                "candidate_trivial_gram_schmidt_norm": trivial_norm,
+                "candidate_after_lll_gram_schmidt_norm": lll_norm,
                 "usability_threshold_q_over_4": usability_threshold,
                 "membership_ok": membership_ok,
             },
+            detail="Balanced representative measured first (trivial), then LLL-reduced and re-measured — the same finishing step NewBasisDel itself applies.",
             algo="ForwardSec",
         )
 
@@ -181,9 +229,9 @@ def forward_sec_experiment(J: int, params: Params, seed: int = 0, h1_variant: st
     overall = (
         "BROKEN: at least one earlier period's trapdoor is cheaply recoverable"
         if any_broken else
-        "Earlier periods survive this trivial attack at these parameters "
-        "(inconclusive about forward security in general — only this "
-        "specific reduction was tested)."
+        "Earlier periods survive both the trivial candidate and its LLL "
+        "re-reduction at these parameters (inconclusive about forward "
+        "security in general — only this specific reduction was tested)."
     )
     trace.result(
         f"Forward-security experiment verdict ({h1_variant})",
