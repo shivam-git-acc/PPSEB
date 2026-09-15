@@ -290,11 +290,22 @@ def api_attack_forward(req: ForwardRequest):
 
 
 @app.post("/api/attack/forward-sweep")
-def api_attack_forward_sweep(req: ForwardSweepRequest):
+async def api_attack_forward_sweep(req: ForwardSweepRequest):
     """PATCH 02 Task B — does the low_norm LLL break survive as n grows?
     Slower than the single-n experiment (each n rebuilds a fresh chain at
     its own m); bounded by an explicit wall-clock budget rather than
-    hanging (see forward_sec.scaling_sweep's module docstring)."""
+    hanging (see forward_sec.scaling_sweep's module docstring).
+
+    Deliberately `async def` calling scaling_sweep directly (not via
+    FastAPI's sync-endpoint threadpool): PATCH 03 Lever 2's optional fpylll
+    BKZ path depends on cysignals, which can only install its signal
+    handler on the MAIN thread — a plain `def` endpoint runs in a worker
+    thread and raises "signal only works in main thread of the main
+    interpreter". Running synchronously on the event loop thread blocks it
+    for the sweep's duration, an acceptable trade-off for this single-user
+    local lab (same "session, not a service" model as the rest of the app)
+    given this is an explicitly slow, deliberately-clicked action.
+    """
     _ensure_initialized()
     params = SESSION.params
     result = scaling_sweep(

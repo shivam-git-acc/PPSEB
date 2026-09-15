@@ -5,3 +5,10 @@ uvicorn[standard]>=0.29
 pydantic>=2.6
 pytest>=8.0
 httpx>=0.27
+
+# Optional (PATCH 03 Lever 2): real BKZ reduction for the forward-security
+# scaling sweep's LEGITIMATE-basis re-reduction. attacks.forward_sec falls
+# back to its own LLL(delta=0.99) automatically if these aren't installed —
+# nothing else in the app depends on them.
+fpylll>=0.6; platform_system == "Linux"
+cysignals>=1.11; platform_system == "Linux"

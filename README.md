@@ -40,6 +40,12 @@ uvicorn api:app --reload --port 8000
 The API is now at `http://127.0.0.1:8000` (docs at `/docs`, health check at
 `/api/health`).
 
+`requirements.txt` also lists `fpylll`/`cysignals` as optional (Linux-only):
+they give the Forward Security tab's dimension-scaling sweep real BKZ
+reduction for the legitimate key chain. If they fail to install (no network,
+or missing build tools), the sweep automatically falls back to the lab's own
+LLL at a stronger reduction factor — nothing else in the app depends on them.
+
 ### Frontend
 
 ```bash

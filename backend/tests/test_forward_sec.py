@@ -1,13 +1,15 @@
+import inspect
 import random
 
 import numpy as np
 
 from ppseb.params import Params, default_params
-from ppseb.linalg import centered_mod_q, gram_schmidt_norm, safe_matmul
+from ppseb.linalg import centered_mod_q, gram_schmidt_norm, lll_reduce, safe_matmul, strong_reduce
 from ppseb.hashes import H1, H1_inverse
 from ppseb.trapgen import trapgen
 from attacks.forward_sec import (
-    forward_sec_experiment, usability_threshold, _verdict_for_period, scaling_sweep,
+    forward_sec_experiment, usability_threshold, _verdict_for_period, _recover_candidate,
+    scaling_sweep, sigma_for_params,
 )
 
 
@@ -47,19 +49,20 @@ def test_verdict_uses_threshold():
 
 
 def test_scaling_sweep_runs():
-    """PATCH 02 §B.5: the sweep returns one row per n with well-formed
-    fields, and the SAME threshold formula (not a second copy) is used at
-    every n — only n (and hence m) varies."""
+    """PATCH 02 §B.5 (updated by PATCH 03 Lever 1: sigma is now dimension-
+    aware, not the base params' fixed sigma): the sweep returns one row per
+    n with well-formed fields, and the SAME threshold FORMULA (not a second
+    copy) is used at every n, evaluated at that row's own (dynamic) sigma."""
     p = default_params()
     result = scaling_sweep(J=3, base_params=p, n_values=(4, 6), seed=1, time_budget_s=120)
     measured = [r for r in result["rows"] if "error" not in r and not r.get("skipped")]
     assert len(measured) == 2
     for row in measured:
-        p_n = Params(n=row["n"], q=p.q, sigma=p.sigma, l=p.l, usability_C=p.usability_C, m=0)
+        p_n = Params(n=row["n"], q=p.q, sigma=row["sigma"], l=p.l, usability_C=p.usability_C, m=0)
         assert row["threshold"] == usability_threshold(p_n)["threshold"]
         assert row["num_broken"] == len(row["broken"])
         assert "runtime_s" in row
-    assert result["trend"] in ("shrinking", "flat_or_growing", "mixed", "inconclusive")
+    assert result["trend"] in ("shrinking", "flat_or_growing", "mixed", "inconclusive", "never_broken")
 
 
 def test_threshold_explicit():
@@ -212,3 +215,54 @@ def test_r_inverse_over_z_matches_incremental_mod_q():
         centered_mod_q(suf_a, q),
         centered_mod_q(np.array([[int(x) for x in row] for row in suf_b_modq], dtype=np.int64), q),
     )
+
+
+def test_sigma_scaling_keeps_legit_usable():
+    """PATCH 03 §5: with dimension-aware sigma (+ strengthened reduction),
+    the legitimate chain stays usable — correctness_lost_at is None — at
+    every tested n, resolving the scaling-sweep confound."""
+    p = default_params()
+    result = scaling_sweep(J=3, base_params=p, n_values=(4, 6), seed=1, time_budget_s=120)
+    measured = [r for r in result["rows"] if "error" not in r and not r.get("skipped")]
+    assert len(measured) == 2
+    for row in measured:
+        assert row["correctness_lost_at"] is None
+    assert result["confound_resolved"] is True
+    assert result["confound_note"] is None
+
+
+def test_legit_reduction_helps():
+    """strong_reduce must never leave a basis LONGER than plain LLL(0.75)
+    produced it, on the same starting basis."""
+    p = default_params()
+    rng = np.random.default_rng(2)
+    _pk, sk = trapgen(p, rng)  # trapgen already LLL(delta=0.75)-reduces internally
+    plain_norm = gram_schmidt_norm(sk)
+    strong, method = strong_reduce(sk)
+    assert method in ("fpylll_bkz", "lll_delta_0.99_fallback")
+    assert gram_schmidt_norm(strong) <= plain_norm + 1e-9
+
+
+def test_attacker_and_legit_reductions_separate():
+    """The attacker's recovery (_recover_candidate) must never call
+    strong_reduce — the legit-basis strengthening (PATCH 03 Lever 2) and the
+    attacker's own LLL are structurally separate code paths, not shared
+    state that could accidentally let one leak into the other."""
+    source = inspect.getsource(_recover_candidate)
+    assert "strong_reduce" not in source
+    assert "lll_reduce" in source
+
+
+def test_sweep_reports_legit_gs_per_n():
+    """Sweep rows must carry sigma and legit-basis norms (PATCH 03 §3), and
+    a period gated out by correctness_lost_at must never appear in `broken`
+    — a contaminated 0 (nothing left to break) can never silently read as
+    'unbroken'."""
+    p = default_params()
+    result = scaling_sweep(J=3, base_params=p, n_values=(4,), seed=1, time_budget_s=60)
+    row = result["rows"][0]
+    assert "sigma" in row and row["sigma"] > 0
+    assert "root_legit_gs" in row and "max_legit_gs" in row
+    if row["correctness_lost_at"] is not None:
+        broken_periods = {b["period"] for b in row["broken"]}
+        assert all(period < row["correctness_lost_at"] for period in broken_periods)

@@ -299,6 +299,47 @@ def lll_reduce(B: np.ndarray, delta: float = 0.75, max_steps: int = 200_000) -> 
     return to_safe_int_array(result)
 
 
+_FPYLLL_AVAILABLE: bool | None = None  # cached probe result
+
+
+def fpylll_available() -> bool:
+    global _FPYLLL_AVAILABLE
+    if _FPYLLL_AVAILABLE is None:
+        try:
+            import fpylll  # noqa: F401
+            _FPYLLL_AVAILABLE = True
+        except ImportError:
+            _FPYLLL_AVAILABLE = False
+    return _FPYLLL_AVAILABLE
+
+
+def strong_reduce(B: np.ndarray, block_size: int = 10, delta: float = 0.99) -> tuple[np.ndarray, str]:
+    """A stronger reduction than the default LLL(delta=0.75) — for a
+    LEGITIMATE key holder's own basis (PATCH 03 Lever 2), never for an
+    attacker's recovered candidate; keep the two uses separate in code and
+    in the trace, since applying this to the legit side is not "helping the
+    attacker" — an honest key holder is entitled to use the best basis they
+    can compute.
+
+    Prefers fpylll's BKZ (a strictly stronger reduction than LLL) if the
+    package is importable; falls back to our own LLL at a delta much closer
+    to 1 (0.99 vs the default 0.75) — a strictly better Lovasz condition,
+    though still polynomial-time LLL, not true BKZ. Returns
+    (reduced_basis, method_used) so callers can report which path ran.
+    """
+    if fpylll_available():
+        from fpylll import BKZ, IntegerMatrix
+        m, k = B.shape
+        M = IntegerMatrix(k, m)
+        for col in range(k):
+            for row in range(m):
+                M[col, row] = int(B[row, col])
+        BKZ.reduction(M, BKZ.Param(block_size=block_size))
+        out = np.array([[M[col, row] for col in range(k)] for row in range(m)], dtype=object)
+        return to_safe_int_array(out), "fpylll_bkz"
+    return lll_reduce(B, delta=delta), "lll_delta_0.99_fallback"
+
+
 # --------------------------------------------------------------------------
 # Rank over GF(q) — used to test linear independence when re-randomizing
 # a basis (NewBasisDel's RandBasis step)

@@ -239,10 +239,15 @@ export default function ForwardSecTab({ onTrace, initialized }) {
       <Card title="Dimension-scaling sweep" subtitle="Does the low_norm LLL break survive as n grows, or is it a low-dimension artifact?">
         <p className="text-sm text-ink-300 leading-relaxed mb-3">
           Runs the same audited reduction at n ∈ {"{"}4, 6, 8{"}"} (m re-derived per n, low_norm H1
-          only) and counts how many earlier periods break after LLL at each n. This is slower —
-          our from-scratch NewBasisDel measured ~3s per period at n=4 (m=72), ~12s at n=6 (m=108),
-          ~38s at n=8 (m=144) — so it runs behind this separate button, bounded by an explicit
-          time budget rather than hanging.
+          only) and counts how many earlier periods break after LLL at each n. A fixed sigma
+          confounds this: the legit basis's own norm grows with m while a fixed threshold
+          doesn't, so the legit chain can lose usability before any attack is even considered.
+          Fixed with sigma scaled to the measured root-basis quality per dimension, plus a
+          stronger reduction (BKZ via fpylll if installed, else LLL at delta=0.99) applied to the
+          legitimate chain's own basis only — never to the attacker's recovered candidate, which
+          still only gets plain LLL. This is slower — our from-scratch NewBasisDel measured ~3s
+          per period at n=4 (m=72), ~12s at n=6 (m=108), ~38s at n=8 (m=144) — so it runs behind
+          this separate button, bounded by an explicit time budget rather than hanging.
         </p>
         <div className="flex items-end gap-4 flex-wrap">
           <label className="block">
@@ -275,6 +280,9 @@ export default function ForwardSecTab({ onTrace, initialized }) {
                   <tr className="text-left text-ink-500 text-xs uppercase">
                     <th className="pb-2 pr-4">n</th>
                     <th className="pb-2 pr-4">m</th>
+                    <th className="pb-2 pr-4">sigma</th>
+                    <th className="pb-2 pr-4">legit ‖GS‖ (root)</th>
+                    <th className="pb-2 pr-4">reduction</th>
                     <th className="pb-2 pr-4">threshold</th>
                     <th className="pb-2 pr-4">correctness lost at</th>
                     <th className="pb-2 pr-4">#broken</th>
@@ -287,12 +295,17 @@ export default function ForwardSecTab({ onTrace, initialized }) {
                     <tr key={r.n} className="border-t border-ink-800">
                       <td className="py-1.5 pr-4">{r.n}</td>
                       {r.error ? (
-                        <td className="py-1.5 text-signal-red" colSpan={6}>invalid params: {r.error}</td>
+                        <td className="py-1.5 text-signal-red" colSpan={9}>invalid params: {r.error}</td>
                       ) : r.skipped ? (
-                        <td className="py-1.5 text-ink-500" colSpan={6}>skipped — {r.note}</td>
+                        <td className="py-1.5 text-ink-500" colSpan={9}>skipped — {r.note}</td>
                       ) : (
                         <>
                           <td className="py-1.5 pr-4">{r.m}</td>
+                          <td className="py-1.5 pr-4">{r.sigma.toFixed(2)}</td>
+                          <td className={`py-1.5 pr-4 ${r.root_legit_gs <= r.threshold ? "text-signal-green" : "text-signal-red"}`}>
+                            {r.root_legit_gs.toFixed(2)}
+                          </td>
+                          <td className="py-1.5 pr-4 text-ink-500 text-[11px]">{r.legit_reduction_method}</td>
                           <td className="py-1.5 pr-4">{r.threshold.toFixed(2)}</td>
                           <td className="py-1.5 pr-4">{r.correctness_lost_at ?? "—"}</td>
                           <td className="py-1.5 pr-4">{r.num_broken}</td>
@@ -306,12 +319,32 @@ export default function ForwardSecTab({ onTrace, initialized }) {
               </table>
             </div>
 
+            <div className="flex items-center gap-2">
+              <Badge tone={sweepResult.confound_resolved ? "green" : "amber"}>
+                {sweepResult.confound_resolved ? "confound resolved" : "confound NOT resolved"}
+              </Badge>
+              <span className="text-xs text-ink-500">{sweepResult.resolution_summary}</span>
+            </div>
+
             <div className="flex items-start gap-3">
-              <Badge tone={sweepResult.trend === "shrinking" ? "green" : sweepResult.trend === "flat_or_growing" ? "amber" : "neutral"}>
+              <Badge tone={sweepResult.trend === "never_broken" || sweepResult.trend === "shrinking" ? "green" : sweepResult.trend === "flat_or_growing" ? "amber" : "neutral"}>
                 {sweepResult.trend}
               </Badge>
               <p className="text-sm text-ink-300">{sweepResult.trend_text}</p>
             </div>
+
+            {sweepResult.confound_resolved && sweepResult.rows.some((r) => !r.error && !r.skipped && r.num_broken === 0) && (
+              <p className="text-xs text-ink-500 leading-relaxed border-t border-ink-800 pt-3">
+                Note: this sweep may show FEWER breaks than the main experiment above at the same
+                n. That's not a contradiction — the sweep additionally re-reduces the legitimate
+                chain's own stored basis (root and every delegated period) with the strongest
+                reduction available, since an honest key holder is entitled to the best basis they
+                can compute; the main experiment does not. The difference itself is a finding:
+                periodic strong reduction of one's own trapdoor is a real, honest mitigation for
+                the practical break, though it does not remove the underlying structural fact that
+                R has a computable (if large) public inverse.
+              </p>
+            )}
 
             {sweepResult.confound_note && (
               <div className="text-xs text-amber-400 bg-amber-500/10 border border-amber-600/30 rounded px-3 py-2.5 leading-relaxed">
