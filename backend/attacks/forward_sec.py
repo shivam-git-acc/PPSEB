@@ -331,12 +331,31 @@ def _verdict_for_period(legit_usable: bool, in_lattice: bool, trivial_gs: float,
     return "survives (trivial + LLL) at these params"
 
 
-def _recover_candidate(P_inv_centered: np.ndarray, target: np.ndarray, pk_i: np.ndarray, q: int) -> tuple[np.ndarray, np.ndarray, bool, float, float]:
-    """The shared "attacker's move" (used by both the main experiment and
-    the scaling sweep): balance the raw transform, then LLL-reduce it, and
-    measure both. Returns (cand_trivial, cand_lll, lll_membership_ok,
-    trivial_norm, lll_norm).
+def _lll_reducer(basis: np.ndarray) -> tuple[np.ndarray, str]:
+    """The attacker's default reduction — plain LLL(delta=0.75) — wrapped to
+    the same (basis) -> (reduced, method_name) shape as `linalg.strong_reduce`,
+    so both can be passed interchangeably as a `reducer` (PATCH 04)."""
+    return lll_reduce(basis), "lll_delta_0.75"
+
+
+def _recover_candidate(
+    P_inv_centered: np.ndarray, target: np.ndarray, pk_i: np.ndarray, q: int,
+    reducer=None,
+) -> tuple[np.ndarray, np.ndarray, bool, float, float, str]:
+    """The shared "attacker's move" (used by the main experiment and both
+    scaling sweeps): balance the raw transform, then reduce it, and measure
+    both. Returns (cand_trivial, cand_reduced, reduced_membership_ok,
+    trivial_norm, reduced_norm, reducer_method).
+
+    `reducer` defaults to plain LLL(delta=0.75) — the original, deliberately
+    weaker attacker tooling. PATCH 04 passes `linalg.strong_reduce` here
+    (the SAME function used to strengthen the legitimate chain) to close the
+    "defender got BKZ, attacker only got LLL" asymmetry: pass the identical
+    reducer to both sides and there is exactly one reduction strength in
+    play, not two.
     """
+    if reducer is None:
+        reducer = _lll_reducer
     cand_raw = safe_matmul(P_inv_centered, target)  # exact integer product; membership holds mod q regardless of representative
     cand_trivial = centered_mod_q(cand_raw, q)
     trivial_ok = bool(np.all(mat_mod_mixed(pk_i, cand_trivial, q) == 0))
@@ -345,10 +364,10 @@ def _recover_candidate(P_inv_centered: np.ndarray, target: np.ndarray, pk_i: np.
         raise RuntimeError("ForwardSec: cand_trivial left L_perp_q(pk_i); this should never happen")
     trivial_norm = gram_schmidt_norm(cand_trivial)
 
-    cand_lll = lll_reduce(cand_trivial)
-    lll_ok = bool(np.all(mat_mod_mixed(pk_i, cand_lll, q) == 0))
-    lll_norm = gram_schmidt_norm(cand_lll)
-    return cand_trivial, cand_lll, lll_ok, trivial_norm, lll_norm
+    cand_reduced, method = reducer(cand_trivial)
+    reduced_ok = bool(np.all(mat_mod_mixed(pk_i, cand_reduced, q) == 0))
+    reduced_norm = gram_schmidt_norm(cand_reduced)
+    return cand_trivial, cand_reduced, reduced_ok, trivial_norm, reduced_norm, method
 
 
 def _suffix_products(R_invs: list[np.ndarray], J: int, m: int, q: int) -> list[np.ndarray]:
@@ -408,7 +427,7 @@ def forward_sec_experiment(J: int, params: Params, seed: int = 0, h1_variant: st
     broken_trivial, broken_after_lll, survives, correctness_lost_rows = [], [], [], []
     for i in range(J):
         P_inv_centered = centered_mod_q(suffix[i], q)
-        _cand_trivial, _cand_lll, lll_ok, trivial_norm, lll_norm = _recover_candidate(
+        _cand_trivial, _cand_lll, lll_ok, trivial_norm, lll_norm, _method = _recover_candidate(
             P_inv_centered, target, chain[i]["pk"], q,
         )
 
@@ -634,7 +653,7 @@ def scaling_sweep(
         broken = []
         for i in range(J):
             P_inv_centered = centered_mod_q(suffix[i], p.q)
-            _t, _l, lll_ok, _trivial_norm, lll_norm = _recover_candidate(
+            _t, _l, lll_ok, _trivial_norm, lll_norm, _method = _recover_candidate(
                 P_inv_centered, target, chain[i]["pk"], p.q,
             )
             if chain[i]["legit_usable"] and lll_ok and lll_norm <= threshold:
@@ -745,4 +764,168 @@ def scaling_sweep(
         "confound_resolved": confound_resolved,
         "resolution_summary": resolution_summary,
         "scaling_caveat": SCALING_CAVEAT.format(n=max((r["n"] for r in measured), default=n_values[0])) if any_break_anywhere else None,
+    }
+
+
+# --------------------------------------------------------------------------
+# PATCH 04 — symmetric tooling: give the attacker the SAME reducer strength
+# as the defender, and show the fairness matrix explicitly.
+# --------------------------------------------------------------------------
+#
+# After PATCH 03, the legitimate chain is strengthened with BKZ/strong LLL
+# but the attacker's recovered candidate was still only ever plain LLL — a
+# "defender got BKZ, attacker only got LLL" asymmetry that would undercut
+# any no-break result. Three configs make the fairness explicit:
+#   LLL_vs_LLL        — legit basis: plain LLL.  attacker: plain LLL.
+#   BKZ_defender_only — legit basis: strong_reduce.  attacker: plain LLL.  (PATCH 03's sweep)
+#   BKZ_vs_BKZ        — legit basis: strong_reduce.  attacker: strong_reduce (SAME reducer).
+#
+# LLL_vs_LLL and {BKZ_defender_only, BKZ_vs_BKZ} need genuinely SEPARATE
+# chain builds: once one period's legit basis is (or isn't) strengthened,
+# that changes what NewBasisDel receives as T_A for the NEXT period, so the
+# two chains diverge after period 1 — there is no way to compute both from
+# a single set of NewBasisDel calls. BKZ_defender_only and BKZ_vs_BKZ DO
+# share one chain build (they only differ in the attacker's own reducer, a
+# cheap post-hoc step), so this only costs 2x a single-config sweep, not 3x.
+#
+# The BKZ_vs_BKZ row is the authoritative fairness test (PATCH 04 §3) — the
+# other two are shown for context, never averaged or cherry-picked from.
+
+THREE_WAY_CONFIGS = ("LLL_vs_LLL", "BKZ_defender_only", "BKZ_vs_BKZ")
+DEFAULT_THREE_WAY_N_VALUES = (4, 6)
+DEFAULT_THREE_WAY_TIME_BUDGET_S = 400.0
+
+
+def three_way_reduction_sweep(
+    J: int, base_params: Params, n_values: tuple[int, ...] = DEFAULT_THREE_WAY_N_VALUES,
+    seed: int = 0, time_budget_s: float = DEFAULT_THREE_WAY_TIME_BUDGET_S,
+) -> dict:
+    """Runs all three LLL/BKZ configs (PATCH 04 §2) at each n, using the SAME
+    audited threshold (PATCH 02 §A.2) throughout. Slower than the plain
+    scaling sweep (two full chain builds per n instead of one) — n defaults
+    to {4, 6} rather than {4, 6, 8} given the measured n=8 cost (PATCH 03:
+    ~150s for one chain build), bounded by an explicit time budget either way.
+    """
+    import time
+
+    rows: list[dict] = []
+    start = time.time()
+    for n in n_values:
+        elapsed = time.time() - start
+        if elapsed >= time_budget_s:
+            rows.append({
+                "n": n, "config": None, "skipped": True,
+                "note": f"sweep time budget ({time_budget_s:.0f}s) exceeded after "
+                        f"{elapsed:.1f}s; skipping n={n} and any larger n rather than hanging.",
+            })
+            break
+
+        p = Params(n=n, q=base_params.q, sigma=base_params.sigma, l=base_params.l,
+                   usability_C=base_params.usability_C, m=0)
+        problems = p.validate()
+        if problems:
+            rows.append({"n": n, "config": None, "error": "; ".join(problems)})
+            continue
+
+        # Lever 1: one root, shared by both chain builds below, sets sigma
+        # (hence the threshold) identically for every config at this n.
+        rng_root = np.random.default_rng(seed)
+        pk0, sk0 = trapgen(p, rng_root)
+        p.sigma = sigma_for_params(sk0, p)
+        thr_info = usability_threshold(p)
+        threshold = thr_info["threshold"]
+
+        # Two genuinely separate chain builds (see module note above).
+        t_plain0 = time.time()
+        chain_plain, _Rs_p, R_invs_plain, cla_plain, method_plain = _build_chain(
+            J, p, np.random.default_rng(seed), random.Random(seed), "low_norm", threshold,
+            Trace(), root=(pk0, sk0), strengthen_legit=False,
+        )
+        t_plain = time.time() - t_plain0
+
+        t_strong0 = time.time()
+        chain_strong, _Rs_s, R_invs_strong, cla_strong, method_strong = _build_chain(
+            J, p, np.random.default_rng(seed), random.Random(seed), "low_norm", threshold,
+            Trace(), root=(pk0, sk0), strengthen_legit=True,
+        )
+        t_strong = time.time() - t_strong0
+
+        config_sources = {
+            "LLL_vs_LLL": (chain_plain, R_invs_plain, cla_plain, None, t_plain),
+            "BKZ_defender_only": (chain_strong, R_invs_strong, cla_strong, None, t_strong),
+            "BKZ_vs_BKZ": (chain_strong, R_invs_strong, cla_strong, strong_reduce, t_strong),
+        }
+
+        for config_name in THREE_WAY_CONFIGS:
+            chain, R_invs, correctness_lost_at, attacker_reducer, build_time = config_sources[config_name]
+            t0 = time.time()
+            target = chain[J]["sk"]
+            suffix = _suffix_products(R_invs, J, p.m, p.q)
+
+            broken = []
+            reducer_methods = set()
+            for i in range(J):
+                P_inv_centered = centered_mod_q(suffix[i], p.q)
+                _t, _r, red_ok, _trivial_norm, reduced_norm, method = _recover_candidate(
+                    P_inv_centered, target, chain[i]["pk"], p.q, reducer=attacker_reducer,
+                )
+                reducer_methods.add(method)
+                if chain[i]["legit_usable"] and red_ok and reduced_norm <= threshold:
+                    broken.append({"period": i, "periods_back": J - i, "after_reduction_gs": reduced_norm})
+
+            rows.append({
+                "n": n,
+                "config": config_name,
+                "m": p.m,
+                "sigma": p.sigma,
+                "threshold": threshold,
+                "legit_reducer_method": (
+                    "lll_construction_only"  # NewBasisDel's own internal LLL; no extra strengthening
+                    if config_name == "LLL_vs_LLL" else method_strong
+                ),
+                "attacker_reducer_method": next(iter(reducer_methods)) if len(reducer_methods) == 1 else sorted(reducer_methods),
+                "correctness_lost_at": correctness_lost_at,
+                "num_broken": len(broken),
+                "broken": broken,
+                "min_after_reduction": min((b["after_reduction_gs"] for b in broken), default=None),
+                "runtime_s": build_time + (time.time() - t0),
+            })
+
+    measured = [r for r in rows if "error" not in r and not r.get("skipped")]
+    bkz_vs_bkz_rows = [r for r in measured if r["config"] == "BKZ_vs_BKZ"]
+
+    if not bkz_vs_bkz_rows:
+        verdict = "inconclusive"
+        verdict_text = "No BKZ_vs_BKZ row completed within the time budget; no fairness verdict can be reported."
+    elif all(r["num_broken"] == 0 and r["correctness_lost_at"] is None for r in bkz_vs_bkz_rows):
+        verdict = "resists_symmetric_bkz"
+        verdict_text = (
+            "Forward-security mechanism resists the R^-1-transform attack even under "
+            "symmetric BKZ tooling, at all tested dimensions. The attack does not recover "
+            "a usable earlier basis. (Demo params; secure-parameter proof still open.)"
+        )
+    else:
+        broken_ns = sorted({r["n"] for r in bkz_vs_bkz_rows if r["num_broken"] > 0})
+        broken_periods = sorted({b["period"] for r in bkz_vs_bkz_rows if r["num_broken"] > 0 for b in r["broken"]})
+        verdict = "broken_under_symmetric_bkz"
+        verdict_text = (
+            f"Under symmetric BKZ tooling the attack recovers a usable earlier basis for "
+            f"period(s) {broken_periods} at n={broken_ns} — a forward-security break that "
+            f"only appears once the attacker is given reduction strength equal to the "
+            f"defender's. This was hidden by the earlier LLL-only attacker tooling."
+        )
+
+    return {
+        "J": J,
+        "n_values": list(n_values),
+        "rows": rows,
+        "verdict": verdict,
+        "verdict_text": verdict_text,
+        "caveats": [
+            "Demonstration parameters (n <= 8). Even symmetric BKZ at small n does not "
+            "settle the cryptographic-parameter question; that needs a proof or a "
+            "large-n BKZ cost estimate, neither of which this lab performs.",
+            "This tests ONE attack family (public R^-1 transform + lattice reduction). "
+            "'Resists this attack' is not the same claim as 'provably forward-secure'.",
+        ],
     }

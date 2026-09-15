@@ -32,6 +32,11 @@ export default function ForwardSecTab({ onTrace, initialized }) {
   const [sweepError, setSweepError] = useState(null);
   const [sweepResult, setSweepResult] = useState(null);
 
+  const [fairnessJ, setFairnessJ] = useState(2);
+  const [fairnessLoading, setFairnessLoading] = useState(false);
+  const [fairnessError, setFairnessError] = useState(null);
+  const [fairnessResult, setFairnessResult] = useState(null);
+
   const run = async () => {
     setLoading(true);
     setError(null);
@@ -56,6 +61,19 @@ export default function ForwardSecTab({ onTrace, initialized }) {
       setSweepError(String(e.message || e));
     } finally {
       setSweepLoading(false);
+    }
+  };
+
+  const runFairness = async () => {
+    setFairnessLoading(true);
+    setFairnessError(null);
+    try {
+      const res = await api.attackForwardFairness({ J: fairnessJ, seed: Math.floor(Math.random() * 1e6) });
+      setFairnessResult(res.result);
+    } catch (e) {
+      setFairnessError(String(e.message || e));
+    } finally {
+      setFairnessLoading(false);
     }
   };
 
@@ -85,6 +103,17 @@ export default function ForwardSecTab({ onTrace, initialized }) {
     minAfterLll: r.min_after_lll,
     threshold: r.threshold,
   }));
+
+  const fairnessMeasured = fairnessResult?.rows.filter((r) => !r.error && !r.skipped) ?? [];
+  const fairnessNs = [...new Set(fairnessMeasured.map((r) => r.n))];
+  const fairnessChartData = fairnessNs.map((n) => {
+    const row = { name: `n=${n}` };
+    for (const cfg of ["LLL_vs_LLL", "BKZ_defender_only", "BKZ_vs_BKZ"]) {
+      const match = fairnessMeasured.find((r) => r.n === n && r.config === cfg);
+      row[cfg] = match ? match.num_broken : 0;
+    }
+    return row;
+  });
 
   return (
     <div className="space-y-5 max-w-4xl">
@@ -356,6 +385,102 @@ export default function ForwardSecTab({ onTrace, initialized }) {
                 ⚠ {sweepResult.scaling_caveat}
               </div>
             )}
+          </div>
+        )}
+        {!initialized && <div className="text-xs text-ink-500 mt-2">Initialize params in the left rail first.</div>}
+      </Card>
+
+      <Card title="Fairness comparison: give the attacker BKZ too" subtitle="Closes the &quot;defender got BKZ, attacker only got LLL&quot; asymmetry — the last step to make a no-break result unimpeachable">
+        <p className="text-sm text-ink-300 leading-relaxed mb-3">
+          Runs three configs per n: <span className="mono text-ink-200">LLL_vs_LLL</span> (the
+          original apples-to-apples), <span className="mono text-ink-200">BKZ_defender_only</span>
+          {" "}(the scaling-sweep state above — legit chain strengthened, attacker still only LLL),
+          and <span className="mono text-ink-200">BKZ_vs_BKZ</span> — the SAME reducer
+          (strong_reduce) passed to both the legitimate chain and the attacker's recovery. The
+          BKZ_vs_BKZ row is the authoritative fairness verdict; the other two are shown for
+          context only. Two full chain builds per n (LLL_vs_LLL needs its own; BKZ_defender_only
+          and BKZ_vs_BKZ share one), so this is slower still than the scaling sweep above.
+        </p>
+        <div className="flex items-end gap-4 flex-wrap">
+          <label className="block">
+            <div className="text-xs text-ink-400 mb-1">Periods (J)</div>
+            <input type="number" min={2} max={4} value={fairnessJ} onChange={(e) => setFairnessJ(Number(e.target.value))}
+              className="mono text-sm bg-ink-900 border border-ink-700 rounded px-2 py-1.5 w-20" />
+          </label>
+          <SecondaryButton onClick={runFairness} disabled={!initialized || fairnessLoading}>
+            {fairnessLoading ? "Running fairness comparison (can take several minutes)…" : "Run fairness comparison"}
+          </SecondaryButton>
+        </div>
+        <ErrorBanner message={fairnessError} />
+
+        {fairnessResult && (
+          <div className="mt-4 space-y-4">
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={fairnessChartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#242c38" />
+                <XAxis dataKey="name" tick={{ fill: "#94a1b3", fontSize: 11 }} />
+                <YAxis tick={{ fill: "#94a1b3", fontSize: 11 }} allowDecimals={false} />
+                <Tooltip contentStyle={{ background: "#141924", border: "1px solid #242c38", fontSize: 12 }} />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                <Bar dataKey="LLL_vs_LLL" name="LLL vs LLL" fill="#94a1b3" />
+                <Bar dataKey="BKZ_defender_only" name="BKZ defender only" fill="#f2b544" />
+                <Bar dataKey="BKZ_vs_BKZ" name="BKZ vs BKZ (fair)" fill="#3ecf8e" />
+              </BarChart>
+            </ResponsiveContainer>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm mono">
+                <thead>
+                  <tr className="text-left text-ink-500 text-xs uppercase">
+                    <th className="pb-2 pr-4">n</th>
+                    <th className="pb-2 pr-4">config</th>
+                    <th className="pb-2 pr-4">legit reducer</th>
+                    <th className="pb-2 pr-4">attacker reducer</th>
+                    <th className="pb-2 pr-4">threshold</th>
+                    <th className="pb-2 pr-4">correctness lost at</th>
+                    <th className="pb-2 pr-4">#broken</th>
+                    <th className="pb-2 pr-4">min after-reduction ‖GS‖</th>
+                    <th className="pb-2">runtime</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {fairnessResult.rows.map((r, idx) => (
+                    <tr key={idx} className={`border-t border-ink-800 ${r.config === "BKZ_vs_BKZ" ? "bg-signal-blue/5" : ""}`}>
+                      <td className="py-1.5 pr-4">{r.n}</td>
+                      {r.error ? (
+                        <td className="py-1.5 text-signal-red" colSpan={8}>invalid params: {r.error}</td>
+                      ) : r.skipped ? (
+                        <td className="py-1.5 text-ink-500" colSpan={8}>skipped — {r.note}</td>
+                      ) : (
+                        <>
+                          <td className="py-1.5 pr-4">{r.config}</td>
+                          <td className="py-1.5 pr-4 text-[11px] text-ink-500">{r.legit_reducer_method}</td>
+                          <td className="py-1.5 pr-4 text-[11px] text-ink-500">{r.attacker_reducer_method}</td>
+                          <td className="py-1.5 pr-4">{r.threshold.toFixed(2)}</td>
+                          <td className="py-1.5 pr-4">{r.correctness_lost_at ?? "—"}</td>
+                          <td className="py-1.5 pr-4">{r.num_broken}</td>
+                          <td className="py-1.5 pr-4">{r.min_after_reduction != null ? r.min_after_reduction.toFixed(2) : "—"}</td>
+                          <td className="py-1.5">{r.runtime_s.toFixed(1)}s</td>
+                        </>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex items-start gap-3">
+              <Badge tone={fairnessResult.verdict === "resists_symmetric_bkz" ? "green" : fairnessResult.verdict === "broken_under_symmetric_bkz" ? "red" : "neutral"}>
+                {fairnessResult.verdict}
+              </Badge>
+              <p className="text-sm text-ink-300">{fairnessResult.verdict_text}</p>
+            </div>
+
+            {fairnessResult.caveats.map((c, i) => (
+              <div key={i} className="text-xs text-amber-400 bg-amber-500/10 border border-amber-600/30 rounded px-3 py-2.5 leading-relaxed">
+                ⚠ {c}
+              </div>
+            ))}
           </div>
         )}
         {!initialized && <div className="text-xs text-ink-500 mt-2">Initialize params in the left rail first.</div>}

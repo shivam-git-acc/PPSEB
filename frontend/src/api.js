@@ -29,5 +29,6 @@ export const api = {
   attackKga: (body) => post("/attack/kga", body),
   attackForward: (body) => post("/attack/forward", body),
   attackForwardSweep: (body) => post("/attack/forward-sweep", body),
+  attackForwardFairness: (body) => post("/attack/forward-fairness", body),
   attackSpec: (body) => post("/attack/spec", body),
 };

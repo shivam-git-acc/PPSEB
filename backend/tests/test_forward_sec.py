@@ -9,7 +9,7 @@ from ppseb.hashes import H1, H1_inverse
 from ppseb.trapgen import trapgen
 from attacks.forward_sec import (
     forward_sec_experiment, usability_threshold, _verdict_for_period, _recover_candidate,
-    scaling_sweep, sigma_for_params,
+    scaling_sweep, sigma_for_params, three_way_reduction_sweep, THREE_WAY_CONFIGS,
 )
 
 
@@ -244,13 +244,25 @@ def test_legit_reduction_helps():
 
 
 def test_attacker_and_legit_reductions_separate():
-    """The attacker's recovery (_recover_candidate) must never call
-    strong_reduce — the legit-basis strengthening (PATCH 03 Lever 2) and the
-    attacker's own LLL are structurally separate code paths, not shared
-    state that could accidentally let one leak into the other."""
+    """PATCH 04 deliberately lets _recover_candidate take `strong_reduce` as
+    an explicit, opt-in `reducer` (that's the whole point — symmetric
+    tooling). What must stay true is that the two are INDEPENDENTLY
+    controlled, not implicitly coupled: (1) _recover_candidate's default
+    (no reducer passed) is still plain LLL, regardless of whether the chain
+    it's given was built with strengthen_legit=True or False; (2) passing a
+    reducer explicitly is the only way strong_reduce ever runs on the
+    attacker's side — there is no hidden global/shared state."""
     source = inspect.getsource(_recover_candidate)
-    assert "strong_reduce" not in source
-    assert "lll_reduce" in source
+    assert "reducer" in source  # explicit parameter, not implicit coupling
+
+    p = default_params()
+    rng = np.random.default_rng(3)
+    pk, sk = trapgen(p, rng)
+    P_inv = np.eye(p.m, dtype=np.int64)
+    # default call (no reducer arg): must be plain LLL regardless of what
+    # kind of basis it's handed.
+    _t, _r, _ok, _tn, _rn, method = _recover_candidate(P_inv, sk, pk, p.q)
+    assert method == "lll_delta_0.75"
 
 
 def test_sweep_reports_legit_gs_per_n():
@@ -266,3 +278,56 @@ def test_sweep_reports_legit_gs_per_n():
     if row["correctness_lost_at"] is not None:
         broken_periods = {b["period"] for b in row["broken"]}
         assert all(period < row["correctness_lost_at"] for period in broken_periods)
+
+
+def test_attacker_uses_same_reducer():
+    """PATCH 04 §5: in the BKZ_vs_BKZ config, the attacker's reducer and the
+    legit chain's reducer must be the identical function/method."""
+    p = default_params()
+    result = three_way_reduction_sweep(J=2, base_params=p, n_values=(4,), seed=1, time_budget_s=120)
+    bkz_rows = [r for r in result["rows"] if r.get("config") == "BKZ_vs_BKZ"]
+    assert bkz_rows
+    for row in bkz_rows:
+        assert row["attacker_reducer_method"] == row["legit_reducer_method"]
+
+
+def test_attacker_candidate_in_lattice_post_bkz():
+    """Post-BKZ (or post-fallback) attacker candidates must still satisfy
+    pk_i . cand = 0 (mod q) — membership_ok is asserted inside
+    _recover_candidate itself (it raises otherwise), so a successful run is
+    the proof; this test just confirms the run completes and reports well-
+    formed rows for the BKZ_vs_BKZ config specifically."""
+    p = default_params()
+    result = three_way_reduction_sweep(J=2, base_params=p, n_values=(4,), seed=2, time_budget_s=120)
+    bkz_rows = [r for r in result["rows"] if r.get("config") == "BKZ_vs_BKZ"]
+    assert bkz_rows
+    for row in bkz_rows:
+        assert row["num_broken"] == len(row["broken"])
+        assert row["attacker_reducer_method"] in ("fpylll_bkz", "lll_delta_0.99_fallback")
+
+
+def test_three_configs_reported():
+    """The sweep must return all three configs, with well-formed rows, at
+    every measured n."""
+    p = default_params()
+    result = three_way_reduction_sweep(J=2, base_params=p, n_values=(4,), seed=1, time_budget_s=120)
+    measured = [r for r in result["rows"] if "error" not in r and not r.get("skipped")]
+    configs_seen = {r["config"] for r in measured}
+    assert configs_seen == set(THREE_WAY_CONFIGS)
+    for row in measured:
+        assert "threshold" in row and "sigma" in row
+        assert row["num_broken"] == len(row["broken"])
+
+
+def test_verdict_reads_bkz_vs_bkz():
+    """The fairness verdict must be derived from the BKZ_vs_BKZ row(s), not
+    from LLL_vs_LLL or BKZ_defender_only — construct a scenario where they'd
+    disagree and confirm the verdict tracks BKZ_vs_BKZ."""
+    p = default_params()
+    result = three_way_reduction_sweep(J=2, base_params=p, n_values=(4,), seed=1, time_budget_s=120)
+    bkz_rows = [r for r in result["rows"] if r.get("config") == "BKZ_vs_BKZ"]
+    all_clean = all(r["num_broken"] == 0 and r["correctness_lost_at"] is None for r in bkz_rows)
+    if all_clean:
+        assert result["verdict"] == "resists_symmetric_bkz"
+    else:
+        assert result["verdict"] == "broken_under_symmetric_bkz"

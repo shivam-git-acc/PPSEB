@@ -25,8 +25,9 @@ from ppseb.scheme import (
 from ppseb.trace import Trace, jsonable
 from attacks.kga import kga_attack
 from attacks.forward_sec import (
-    forward_sec_experiment, scaling_sweep, H1_VARIANTS, DEFAULT_SWEEP_N_VALUES,
-    DEFAULT_SWEEP_TIME_BUDGET_S,
+    forward_sec_experiment, scaling_sweep, three_way_reduction_sweep, H1_VARIANTS,
+    DEFAULT_SWEEP_N_VALUES, DEFAULT_SWEEP_TIME_BUDGET_S,
+    DEFAULT_THREE_WAY_N_VALUES, DEFAULT_THREE_WAY_TIME_BUDGET_S,
 )
 from attacks.spec_defect import run_paper_version, run_corrected_version
 
@@ -125,6 +126,13 @@ class ForwardSweepRequest(BaseModel):
     n_values: list[int] = Field(default_factory=lambda: list(DEFAULT_SWEEP_N_VALUES))
     seed: int = 0
     time_budget_s: float = Field(DEFAULT_SWEEP_TIME_BUDGET_S, gt=0, le=600)
+
+
+class ForwardFairnessRequest(BaseModel):
+    J: int = Field(2, ge=2, le=4)
+    n_values: list[int] = Field(default_factory=lambda: list(DEFAULT_THREE_WAY_N_VALUES))
+    seed: int = 0
+    time_budget_s: float = Field(DEFAULT_THREE_WAY_TIME_BUDGET_S, gt=0, le=900)
 
 
 class SpecRequest(BaseModel):
@@ -309,6 +317,24 @@ async def api_attack_forward_sweep(req: ForwardSweepRequest):
     _ensure_initialized()
     params = SESSION.params
     result = scaling_sweep(
+        req.J, params, n_values=tuple(req.n_values), seed=req.seed,
+        time_budget_s=req.time_budget_s,
+    )
+    return envelope(result, [], params)
+
+
+@app.post("/api/attack/forward-fairness")
+async def api_attack_forward_fairness(req: ForwardFairnessRequest):
+    """PATCH 04 — closes the "defender got BKZ, attacker only got LLL"
+    asymmetry left by PATCH 03: runs LLL_vs_LLL, BKZ_defender_only, and
+    BKZ_vs_BKZ at each n, the last being the authoritative fairness test.
+    `async def` for the same cysignals/main-thread reason as the sweep
+    endpoint above. Slower still (two full chain builds per n) — n defaults
+    to a smaller {4, 6} range; see three_way_reduction_sweep's docstring.
+    """
+    _ensure_initialized()
+    params = SESSION.params
+    result = three_way_reduction_sweep(
         req.J, params, n_values=tuple(req.n_values), seed=req.seed,
         time_budget_s=req.time_budget_s,
     )
