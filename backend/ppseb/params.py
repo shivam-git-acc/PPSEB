@@ -38,12 +38,23 @@ class Params:
     sigma : Gaussian width used by SamplePre / SampleGaussian / NewBasisDel
     l     : keyword-test length ("security level" S_l in the paper) — the
             width of the shared matrix B_j and of CT1 / CT2.
+    usability_C : the smoothing-constant modelling choice used by
+            attacks.forward_sec.usability_threshold (Finding 2, PATCH 02
+            §A.2) — exposed here (not hardcoded in the attack module) so the
+            UI can show and, if desired, vary it. Default 0.2: the textbook
+            asymptotic constant (1.0) is strict enough to reject even a
+            freshly-generated TrapGen root basis at these toy parameters
+            (Lemma 1 in the paper claims O(sqrt(n log q)) ~ 6 for that root
+            basis), which would make the threshold degenerate before any
+            KeyExt is even invoked. See usability_threshold's own docstring
+            for the full derivation and the C=1 comparison it also reports.
     """
 
     n: int = 4
     q: int = 257
     sigma: float = 4.0
     l: int = 10
+    usability_C: float = 0.2
     m: int = field(default=0)  # 0 => "derive it"
 
     def __post_init__(self) -> None:
@@ -67,6 +78,8 @@ class Params:
             problems.append("sigma must be positive.")
         if self.l < 1:
             problems.append("l must be >= 1.")
+        if self.usability_C <= 0:
+            problems.append("usability_C must be positive.")
         if self.m % self.n != 0:
             problems.append(
                 f"m={self.m} is not a multiple of n={self.n}; H2's block-diagonal "

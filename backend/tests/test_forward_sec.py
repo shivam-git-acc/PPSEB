@@ -2,11 +2,64 @@ import random
 
 import numpy as np
 
-from ppseb.params import default_params
+from ppseb.params import Params, default_params
 from ppseb.linalg import centered_mod_q, gram_schmidt_norm, safe_matmul
 from ppseb.hashes import H1, H1_inverse
 from ppseb.trapgen import trapgen
-from attacks.forward_sec import forward_sec_experiment, usability_threshold, _verdict_for_period
+from attacks.forward_sec import (
+    forward_sec_experiment, usability_threshold, _verdict_for_period, scaling_sweep,
+)
+
+
+def test_threshold_matches_formula():
+    """PATCH 02 §A.6: usability_threshold(default) must equal min(sampling,
+    decode) exactly, and the LITERAL textbook comparison values it reports
+    (C=1, decode noise=sigma) must match the patch's own hand-derivation
+    (~1.9) so that number can't silently drift even though we deliberately
+    use different (documented) constants for the actual threshold."""
+    p = default_params()
+    info = usability_threshold(p)
+    assert abs(info["threshold"] - min(info["sampling_cap"], info["decode_cap"])) < 1e-9
+    assert abs(info["threshold_C1_sigma_naive"] - 1.9) < 0.1
+
+
+def test_threshold_single_source():
+    """The threshold value used by the per-row chart payload, the verdict
+    logic, and the returned threshold_info must be byte-identical — there
+    must be exactly one source of truth (PATCH 02 §A.2/§A.6)."""
+    p = default_params()
+    result = forward_sec_experiment(J=3, params=p, seed=4, h1_variant="low_norm")
+    thr = result["threshold_info"]["threshold"]
+    assert result["summary"]["threshold"] == thr
+    for row in result["rows"]:
+        assert row["usability_threshold"] == thr
+
+
+def test_verdict_uses_threshold():
+    """A candidate just under threshold is broken; just over, it survives —
+    exercised directly against the verdict function (PATCH 02 §A.6)."""
+    p = default_params()
+    thr = usability_threshold(p)["threshold"]
+    broken = _verdict_for_period(legit_usable=True, in_lattice=True, trivial_gs=thr * 5, lll_gs=thr * 0.99, threshold=thr)
+    assert broken == "BROKEN (after LLL reduction)"
+    survives = _verdict_for_period(legit_usable=True, in_lattice=True, trivial_gs=thr * 5, lll_gs=thr * 1.01, threshold=thr)
+    assert survives == "survives (trivial + LLL) at these params"
+
+
+def test_scaling_sweep_runs():
+    """PATCH 02 §B.5: the sweep returns one row per n with well-formed
+    fields, and the SAME threshold formula (not a second copy) is used at
+    every n — only n (and hence m) varies."""
+    p = default_params()
+    result = scaling_sweep(J=3, base_params=p, n_values=(4, 6), seed=1, time_budget_s=120)
+    measured = [r for r in result["rows"] if "error" not in r and not r.get("skipped")]
+    assert len(measured) == 2
+    for row in measured:
+        p_n = Params(n=row["n"], q=p.q, sigma=p.sigma, l=p.l, usability_C=p.usability_C, m=0)
+        assert row["threshold"] == usability_threshold(p_n)["threshold"]
+        assert row["num_broken"] == len(row["broken"])
+        assert "runtime_s" in row
+    assert result["trend"] in ("shrinking", "flat_or_growing", "mixed", "inconclusive")
 
 
 def test_threshold_explicit():

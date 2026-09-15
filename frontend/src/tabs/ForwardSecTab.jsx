@@ -4,7 +4,7 @@ import {
   CartesianGrid, ReferenceLine, ReferenceDot,
 } from "recharts";
 import { api } from "../api";
-import { Card, Badge, PrimaryButton, ErrorBanner } from "../components/Section";
+import { Card, Badge, PrimaryButton, SecondaryButton, ErrorBanner } from "../components/Section";
 
 function verdictTone(v) {
   if (v === "BROKEN (trivial transform)") return "red";
@@ -27,6 +27,11 @@ export default function ForwardSecTab({ onTrace, initialized }) {
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
 
+  const [sweepJ, setSweepJ] = useState(3);
+  const [sweepLoading, setSweepLoading] = useState(false);
+  const [sweepError, setSweepError] = useState(null);
+  const [sweepResult, setSweepResult] = useState(null);
+
   const run = async () => {
     setLoading(true);
     setError(null);
@@ -38,6 +43,19 @@ export default function ForwardSecTab({ onTrace, initialized }) {
       setError(String(e.message || e));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const runSweep = async () => {
+    setSweepLoading(true);
+    setSweepError(null);
+    try {
+      const res = await api.attackForwardSweep({ J: sweepJ, seed: Math.floor(Math.random() * 1e6) });
+      setSweepResult(res.result);
+    } catch (e) {
+      setSweepError(String(e.message || e));
+    } finally {
+      setSweepLoading(false);
     }
   };
 
@@ -59,6 +77,14 @@ export default function ForwardSecTab({ onTrace, initialized }) {
   const collapseRow = result?.correctness_lost_at != null
     ? chartDataNaive.find((r) => r.period === result.correctness_lost_at)
     : null;
+
+  const sweepMeasured = sweepResult?.rows.filter((r) => !r.error && !r.skipped) ?? [];
+  const sweepChartData = sweepMeasured.map((r) => ({
+    name: `n=${r.n}`,
+    numBroken: r.num_broken,
+    minAfterLll: r.min_after_lll,
+    threshold: r.threshold,
+  }));
 
   return (
     <div className="space-y-5 max-w-4xl">
@@ -103,10 +129,14 @@ export default function ForwardSecTab({ onTrace, initialized }) {
       {result && (
         <>
           <Card title={result.headline}>
-            <div className="mono text-xs text-ink-400 mb-2">
-              usability threshold = <span className="text-ink-100">{result.threshold_info.threshold.toFixed(2)}</span>
-              {" "}(binding: <span className="text-ink-100">{result.threshold_info.binding_bound}</span> bound —
-              {" "}sampling cap {result.threshold_info.sampling_cap.toFixed(2)}, decode cap {result.threshold_info.decode_cap.toFixed(2)})
+            <div className="mono text-xs text-ink-100 mb-2">
+              threshold = {result.threshold_info.threshold.toFixed(3)}
+              {" "}(binding: {result.threshold_info.binding_bound}; C={result.threshold_info.C},
+              {" "}m={result.threshold_info.m}, sigma={result.threshold_info.sigma}, q={result.threshold_info.q})
+            </div>
+            <div className="mono text-[11px] text-ink-500 mb-2">
+              sampling cap {result.threshold_info.sampling_cap.toFixed(3)} · decode cap {result.threshold_info.decode_cap.toFixed(3)}
+              {" · "}<span className="text-ink-600">literal-textbook comparison (C=1, decode noise=sigma): threshold would be {result.threshold_info.threshold_C1_sigma_naive.toFixed(3)}</span>
             </div>
             <p className="text-xs text-ink-500 leading-relaxed">{result.threshold_info.note}</p>
           </Card>
@@ -120,8 +150,12 @@ export default function ForwardSecTab({ onTrace, initialized }) {
                   <YAxis scale="log" domain={["auto", "auto"]} tick={{ fill: "#94a1b3", fontSize: 11 }} allowDataOverflow />
                   <Tooltip contentStyle={{ background: "#141924", border: "1px solid #242c38", fontSize: 12 }} />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <ReferenceLine y={result.threshold_info.sampling_cap} stroke="#6b7788" strokeDasharray="2 3"
+                    label={{ value: `sampling cap ${result.threshold_info.sampling_cap.toFixed(2)}`, position: "insideBottomRight", fill: "#6b7788", fontSize: 9 }} />
+                  <ReferenceLine y={result.threshold_info.decode_cap} stroke="#6b7788" strokeDasharray="2 3"
+                    label={{ value: `decode cap ${result.threshold_info.decode_cap.toFixed(2)}`, position: "insideBottomRight", fill: "#6b7788", fontSize: 9 }} />
                   <ReferenceLine y={result.threshold_info.threshold} stroke="#f2685c" strokeDasharray="4 3"
-                    label={{ value: "usability threshold", position: "insideTopRight", fill: "#f2685c", fontSize: 10 }} />
+                    label={{ value: `usability ≈ ${result.threshold_info.threshold.toFixed(2)} (${result.threshold_info.binding_bound} bound)`, position: "insideTopRight", fill: "#f2685c", fontSize: 10 }} />
                   <Line type="monotone" dataKey="legit" name="legit ‖GS(sk_ri)‖" stroke="#3ecf8e" strokeWidth={2} dot />
                   {collapseRow && (
                     <ReferenceDot x={collapseRow.name} y={collapseRow.legit} r={6} fill="#f2685c" stroke="none"
@@ -139,8 +173,12 @@ export default function ForwardSecTab({ onTrace, initialized }) {
                   <YAxis scale="log" domain={["auto", "auto"]} tick={{ fill: "#94a1b3", fontSize: 11 }} allowDataOverflow />
                   <Tooltip contentStyle={{ background: "#141924", border: "1px solid #242c38", fontSize: 12 }} />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <ReferenceLine y={result.threshold_info.sampling_cap} stroke="#6b7788" strokeDasharray="2 3"
+                    label={{ value: `sampling cap ${result.threshold_info.sampling_cap.toFixed(2)}`, position: "insideBottomRight", fill: "#6b7788", fontSize: 9 }} />
+                  <ReferenceLine y={result.threshold_info.decode_cap} stroke="#6b7788" strokeDasharray="2 3"
+                    label={{ value: `decode cap ${result.threshold_info.decode_cap.toFixed(2)}`, position: "insideBottomRight", fill: "#6b7788", fontSize: 9 }} />
                   <ReferenceLine y={result.threshold_info.threshold} stroke="#f2685c" strokeDasharray="4 3"
-                    label={{ value: "usability threshold", position: "insideTopRight", fill: "#f2685c", fontSize: 10 }} />
+                    label={{ value: `usability ≈ ${result.threshold_info.threshold.toFixed(2)} (${result.threshold_info.binding_bound} bound)`, position: "insideTopRight", fill: "#f2685c", fontSize: 10 }} />
                   <Bar dataKey="legit" name="legit ‖GS(sk_ri)‖" fill="#3ecf8e" />
                   <Bar dataKey="trivial" name="candidate, trivial (balanced)" fill="#94a1b3" />
                   <Bar dataKey="afterLll" name="candidate, after LLL reduction" fill="#f2b544" />
@@ -197,6 +235,98 @@ export default function ForwardSecTab({ onTrace, initialized }) {
           </Card>
         </>
       )}
+
+      <Card title="Dimension-scaling sweep" subtitle="Does the low_norm LLL break survive as n grows, or is it a low-dimension artifact?">
+        <p className="text-sm text-ink-300 leading-relaxed mb-3">
+          Runs the same audited reduction at n ∈ {"{"}4, 6, 8{"}"} (m re-derived per n, low_norm H1
+          only) and counts how many earlier periods break after LLL at each n. This is slower —
+          our from-scratch NewBasisDel measured ~3s per period at n=4 (m=72), ~12s at n=6 (m=108),
+          ~38s at n=8 (m=144) — so it runs behind this separate button, bounded by an explicit
+          time budget rather than hanging.
+        </p>
+        <div className="flex items-end gap-4 flex-wrap">
+          <label className="block">
+            <div className="text-xs text-ink-400 mb-1">Periods (J)</div>
+            <input type="number" min={2} max={6} value={sweepJ} onChange={(e) => setSweepJ(Number(e.target.value))}
+              className="mono text-sm bg-ink-900 border border-ink-700 rounded px-2 py-1.5 w-20" />
+          </label>
+          <SecondaryButton onClick={runSweep} disabled={!initialized || sweepLoading}>
+            {sweepLoading ? "Running sweep (can take a few minutes)…" : "Run scaling sweep"}
+          </SecondaryButton>
+        </div>
+        <ErrorBanner message={sweepError} />
+
+        {sweepResult && (
+          <div className="mt-4 space-y-4">
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={sweepChartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#242c38" />
+                <XAxis dataKey="name" tick={{ fill: "#94a1b3", fontSize: 11 }} />
+                <YAxis tick={{ fill: "#94a1b3", fontSize: 11 }} allowDecimals={false} />
+                <Tooltip contentStyle={{ background: "#141924", border: "1px solid #242c38", fontSize: 12 }} />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                <Bar dataKey="numBroken" name="periods broken after LLL" fill="#f2b544" />
+              </BarChart>
+            </ResponsiveContainer>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm mono">
+                <thead>
+                  <tr className="text-left text-ink-500 text-xs uppercase">
+                    <th className="pb-2 pr-4">n</th>
+                    <th className="pb-2 pr-4">m</th>
+                    <th className="pb-2 pr-4">threshold</th>
+                    <th className="pb-2 pr-4">correctness lost at</th>
+                    <th className="pb-2 pr-4">#broken</th>
+                    <th className="pb-2 pr-4">min after-LLL ‖GS‖</th>
+                    <th className="pb-2">runtime</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sweepResult.rows.map((r) => (
+                    <tr key={r.n} className="border-t border-ink-800">
+                      <td className="py-1.5 pr-4">{r.n}</td>
+                      {r.error ? (
+                        <td className="py-1.5 text-signal-red" colSpan={6}>invalid params: {r.error}</td>
+                      ) : r.skipped ? (
+                        <td className="py-1.5 text-ink-500" colSpan={6}>skipped — {r.note}</td>
+                      ) : (
+                        <>
+                          <td className="py-1.5 pr-4">{r.m}</td>
+                          <td className="py-1.5 pr-4">{r.threshold.toFixed(2)}</td>
+                          <td className="py-1.5 pr-4">{r.correctness_lost_at ?? "—"}</td>
+                          <td className="py-1.5 pr-4">{r.num_broken}</td>
+                          <td className="py-1.5 pr-4">{r.min_after_lll != null ? r.min_after_lll.toFixed(2) : "—"}</td>
+                          <td className="py-1.5">{r.runtime_s.toFixed(1)}s</td>
+                        </>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex items-start gap-3">
+              <Badge tone={sweepResult.trend === "shrinking" ? "green" : sweepResult.trend === "flat_or_growing" ? "amber" : "neutral"}>
+                {sweepResult.trend}
+              </Badge>
+              <p className="text-sm text-ink-300">{sweepResult.trend_text}</p>
+            </div>
+
+            {sweepResult.confound_note && (
+              <div className="text-xs text-amber-400 bg-amber-500/10 border border-amber-600/30 rounded px-3 py-2.5 leading-relaxed">
+                ⚠ {sweepResult.confound_note}
+              </div>
+            )}
+            {sweepResult.scaling_caveat && (
+              <div className="text-xs text-amber-400 bg-amber-500/10 border border-amber-600/30 rounded px-3 py-2.5 leading-relaxed">
+                ⚠ {sweepResult.scaling_caveat}
+              </div>
+            )}
+          </div>
+        )}
+        {!initialized && <div className="text-xs text-ink-500 mt-2">Initialize params in the left rail first.</div>}
+      </Card>
     </div>
   );
 }

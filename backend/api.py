@@ -24,7 +24,10 @@ from ppseb.scheme import (
 )
 from ppseb.trace import Trace, jsonable
 from attacks.kga import kga_attack
-from attacks.forward_sec import forward_sec_experiment, H1_VARIANTS
+from attacks.forward_sec import (
+    forward_sec_experiment, scaling_sweep, H1_VARIANTS, DEFAULT_SWEEP_N_VALUES,
+    DEFAULT_SWEEP_TIME_BUDGET_S,
+)
 from attacks.spec_defect import run_paper_version, run_corrected_version
 
 app = FastAPI(title="PPSEB Analysis Lab API")
@@ -115,6 +118,13 @@ class ForwardRequest(BaseModel):
     J: int = Field(..., ge=1, le=12)
     h1_variant: str = "low_norm"
     seed: int = 0
+
+
+class ForwardSweepRequest(BaseModel):
+    J: int = Field(3, ge=2, le=6)
+    n_values: list[int] = Field(default_factory=lambda: list(DEFAULT_SWEEP_N_VALUES))
+    seed: int = 0
+    time_budget_s: float = Field(DEFAULT_SWEEP_TIME_BUDGET_S, gt=0, le=600)
 
 
 class SpecRequest(BaseModel):
@@ -277,6 +287,21 @@ def api_attack_forward(req: ForwardRequest):
         {k: v for k, v in result.items() if k != "trace"},
         result["trace"], params,
     )
+
+
+@app.post("/api/attack/forward-sweep")
+def api_attack_forward_sweep(req: ForwardSweepRequest):
+    """PATCH 02 Task B — does the low_norm LLL break survive as n grows?
+    Slower than the single-n experiment (each n rebuilds a fresh chain at
+    its own m); bounded by an explicit wall-clock budget rather than
+    hanging (see forward_sec.scaling_sweep's module docstring)."""
+    _ensure_initialized()
+    params = SESSION.params
+    result = scaling_sweep(
+        req.J, params, n_values=tuple(req.n_values), seed=req.seed,
+        time_budget_s=req.time_budget_s,
+    )
+    return envelope(result, [], params)
 
 
 @app.post("/api/attack/spec")

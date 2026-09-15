@@ -28,5 +28,6 @@ export const api = {
   encryptSearch: (body) => post("/encrypt-search", body),
   attackKga: (body) => post("/attack/kga", body),
   attackForward: (body) => post("/attack/forward", body),
+  attackForwardSweep: (body) => post("/attack/forward-sweep", body),
   attackSpec: (body) => post("/attack/spec", body),
 };
