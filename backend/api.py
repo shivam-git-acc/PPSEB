@@ -29,6 +29,7 @@ from attacks.forward_sec import (
     DEFAULT_SWEEP_N_VALUES, DEFAULT_SWEEP_TIME_BUDGET_S,
     DEFAULT_THREE_WAY_N_VALUES, DEFAULT_THREE_WAY_TIME_BUDGET_S,
 )
+from attacks.end_to_end import end_to_end_experiment, end_to_end_multi_n, DEFAULT_END_TO_END_N_VALUES
 from attacks.spec_defect import run_paper_version, run_corrected_version
 
 app = FastAPI(title="PPSEB Analysis Lab API")
@@ -133,6 +134,20 @@ class ForwardFairnessRequest(BaseModel):
     n_values: list[int] = Field(default_factory=lambda: list(DEFAULT_THREE_WAY_N_VALUES))
     seed: int = 0
     time_budget_s: float = Field(DEFAULT_THREE_WAY_TIME_BUDGET_S, gt=0, le=900)
+
+
+class ForwardE2ERequest(BaseModel):
+    J: int = Field(2, ge=2, le=4)
+    n: int = 4
+    seed: int = 0
+    reducer_name: str = "bkz"
+
+
+class ForwardE2EMultiRequest(BaseModel):
+    J: int = Field(2, ge=2, le=4)
+    n_values: list[int] = Field(default_factory=lambda: list(DEFAULT_END_TO_END_N_VALUES))
+    seed: int = 0
+    reducer_name: str = "bkz"
 
 
 class SpecRequest(BaseModel):
@@ -339,6 +354,46 @@ async def api_attack_forward_fairness(req: ForwardFairnessRequest):
         time_budget_s=req.time_budget_s,
     )
     return envelope(result, [], params)
+
+
+@app.post("/api/attack/forward-e2e")
+async def api_attack_forward_e2e(req: ForwardE2ERequest):
+    """PATCH 05 — end-to-end forward-security attack: builds and FREEZES
+    the honest doctor's searchable database at each period, evolves the key
+    to period J (stolen), then has the attacker reconstruct SK*_r|i and run
+    the SAME search/decrypt code path against the frozen ciphertexts. Never
+    a norm proxy — Level 2/3 are measured N0/plaintext equality. `async def`
+    for the same cysignals/main-thread reason as the other slow endpoints.
+    """
+    _ensure_initialized()
+    params = SESSION.params
+    result = end_to_end_experiment(
+        req.J, params, n=req.n, seed=req.seed, reducer_name=req.reducer_name,
+    )
+    return envelope(
+        {k: v for k, v in result.items() if k != "trace"},
+        result["trace"], params,
+    )
+
+
+@app.post("/api/attack/forward-e2e-multi")
+async def api_attack_forward_e2e_multi(req: ForwardE2EMultiRequest):
+    """Runs the end-to-end attack at multiple n (default {4, 8} — n=6 has
+    no valid H2 for q=257, see attacks.end_to_end's module docstring) and
+    reports the honest cross-dimension headline. Slower (one full run per
+    n); each n's own trace stays nested in `per_n`, not hoisted to the top.
+    """
+    _ensure_initialized()
+    params = SESSION.params
+    result = end_to_end_multi_n(
+        req.J, params, n_values=tuple(req.n_values), seed=req.seed, reducer_name=req.reducer_name,
+    )
+    combined_trace = [ev for r in result["per_n"] if "error" not in r for ev in r.get("trace", [])]
+    result_no_trace = {
+        **result,
+        "per_n": [{k: v for k, v in r.items() if k != "trace"} for r in result["per_n"]],
+    }
+    return envelope(result_no_trace, combined_trace, params)
 
 
 @app.post("/api/attack/spec")

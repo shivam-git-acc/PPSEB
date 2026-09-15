@@ -112,13 +112,27 @@ def _irreducible_twist(n: int, q: int) -> int:
     matrix — that's what lets `_twisted_circulant` build a matrix whose
     entries are literally the (small) input coefficients, instead of an
     opaque companion-matrix expansion that spreads them across all of Z_q.
+
+    KNOWN LIMITATION: x^n - c is irreducible over GF(q) only for n whose
+    every prime factor divides ord(GF(q)*) = q-1 (Lidl-Niederreiter's
+    binomial irreducibility criterion) — for q=257, q-1=256=2^8, so this
+    holds only for n a power of 2 (2, 4, 8, 16, ...). n=6 (a factor of 3,
+    which does not divide 256) has NO valid c at all, for any q with
+    q-1=256 — not a search failure, a genuine non-existence. Callers that
+    need to vary n (e.g. attacks.end_to_end's dimension sweep) should pick
+    n from {2, 4, 8, 16, ...} when q=257, or a different q whose q-1 shares
+    n's prime factors otherwise.
     """
     from sympy.polys.galoistools import gf_irreducible_p
     for c in range(2, q):
         f = [1] + [0] * (n - 1) + [(-c) % q]
         if gf_irreducible_p(f, q, ZZ):
             return c
-    raise RuntimeError(f"no irreducible x^{n} - c found mod q={q}")
+    raise RuntimeError(
+        f"no irreducible x^{n} - c exists mod q={q}: every prime factor of n must "
+        f"divide q-1={q - 1}. For q=257 (q-1=256=2^8), n must be a power of 2 "
+        f"(2, 4, 8, 16, ...); n={n} has a prime factor that does not divide 256."
+    )
 
 
 def _twisted_circulant(a: list[int], c: int, q: int) -> np.ndarray:

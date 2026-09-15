@@ -139,19 +139,18 @@ def usability_threshold(params: Params) -> dict:
       numbers are reported below (`sampling_cap` vs `sampling_cap_C1_naive`)
       so this deviation is fully visible, not hidden.
     - The decode bound's noise width uses the ACTUAL PEKS/Trapdoor
-      ciphertext noise (`scheme.CIPHERTEXT_NOISE_SIGMA`, 0.4) rather than
-      the lattice-sampling `params.sigma` (4.0) — those are two different
-      widths in this codebase (params.sigma governs Klein/SamplePre's
-      lattice-sampling quality; CIPHERTEXT_NOISE_SIGMA is the noise actually
-      added to CT1/CT2/Trap's inner product in Verify), and the decode
-      margin is governed by the latter. The literal decode_cap using
-      params.sigma is also reported (`decode_cap_sigma_naive`) for the same
-      transparency reason.
+      ciphertext noise (`params.ciphertext_noise_sigma`, default 0.4) rather
+      than the lattice-sampling `params.sigma` (4.0) — those are two
+      different widths in this codebase (params.sigma governs Klein/
+      SamplePre's lattice-sampling quality; ciphertext_noise_sigma is the
+      noise actually added to CT1/CT2/Trap's inner product in Verify), and
+      the decode margin is governed by the latter. The literal decode_cap
+      using params.sigma is also reported (`decode_cap_sigma_naive`) for
+      the same transparency reason.
     """
-    from ppseb.scheme import CIPHERTEXT_NOISE_SIGMA
-
     C = params.usability_C
     m, sigma, q = params.m, params.sigma, params.q
+    decode_noise_sigma = params.ciphertext_noise_sigma
     log_m = max(math.log(m), 1.0)
 
     # Sampling bound: SamplePre/Klein needs sigma >= g * omega(sqrt(log m))
@@ -160,7 +159,7 @@ def usability_threshold(params: Params) -> dict:
     # Decode bound: a basis of GS-norm g induces preimages of norm
     # ~ g * (decode noise) * sqrt(m); Verify's accumulated noise must stay
     # under q/4.
-    decode_cap = (q / 4.0) / (CIPHERTEXT_NOISE_SIGMA * math.sqrt(m))
+    decode_cap = (q / 4.0) / (decode_noise_sigma * math.sqrt(m))
 
     cap = min(sampling_cap, decode_cap)
     binding = "sampling" if sampling_cap <= decode_cap else "decode"
@@ -181,7 +180,7 @@ def usability_threshold(params: Params) -> dict:
         "sigma": sigma,
         "q": q,
         "log_m": log_m,
-        "decode_noise_sigma": CIPHERTEXT_NOISE_SIGMA,
+        "decode_noise_sigma": decode_noise_sigma,
         "sampling_cap_C1_naive": sampling_cap_C1_naive,
         "decode_cap_sigma_naive": decode_cap_sigma_naive,
         "threshold_C1_sigma_naive": min(sampling_cap_C1_naive, decode_cap_sigma_naive),
@@ -189,7 +188,7 @@ def usability_threshold(params: Params) -> dict:
                 f"Two explicit modelling choices behind this number: C={C} (not the literal "
                 f"textbook C=1, which gives sampling_cap={sampling_cap_C1_naive:.3f} — strict "
                 f"enough to reject a freshly-generated TrapGen root basis); and the decode bound "
-                f"uses the actual ciphertext noise width {CIPHERTEXT_NOISE_SIGMA} (not "
+                f"uses the actual ciphertext noise width {decode_noise_sigma} (not "
                 f"params.sigma={sigma}, which would give decode_cap={decode_cap_sigma_naive:.3f}). "
                 f"Both naive values are reported alongside the chosen ones for full auditability.",
     }

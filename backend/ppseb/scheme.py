@@ -23,6 +23,10 @@ from .trapgen import trapgen
 # trapdoor vector, whereas `sigma` sets the width of the discrete-Gaussian
 # lattice sampler (SamplePre / NewBasisDel). The paper does not specify a
 # concrete noise width for either; this is a reasonable, documented choice.
+# Exposed as `params.ciphertext_noise_sigma` (see Params' own docstring for
+# why this needs to be a per-run value, not a fixed constant, once PATCH 05
+# starts actually running Verify against a dimension-aware sigma). This
+# module constant is now only the field's default.
 CIPHERTEXT_NOISE_SIGMA = 0.4
 
 
@@ -136,8 +140,8 @@ def peks_encrypt(
     beta_inv = H2_inverse(beta, q)
 
     B = rng.integers(0, q, size=(n, l)).astype(np.int64)
-    noise1 = _small_noise((l,), CIPHERTEXT_NOISE_SIGMA, py_rng)
-    noise2 = _small_noise((m, l), CIPHERTEXT_NOISE_SIGMA, py_rng)
+    noise1 = _small_noise((l,), params.ciphertext_noise_sigma, py_rng)
+    noise2 = _small_noise((m, l), params.ciphertext_noise_sigma, py_rng)
     half_q = q // 2
     y_ones = np.ones(l, dtype=np.int64)
 
@@ -255,8 +259,8 @@ def encrypt_record(
     C2 = np.zeros(len(bits), dtype=np.int64)
     for i, b in enumerate(bits):
         s = rng.integers(0, q, size=n).astype(np.int64)
-        e = _small_noise((m,), CIPHERTEXT_NOISE_SIGMA, py_rng)
-        e_prime = int(_small_noise((1,), CIPHERTEXT_NOISE_SIGMA, py_rng)[0])
+        e = _small_noise((m,), params.ciphertext_noise_sigma, py_rng)
+        e_prime = int(_small_noise((1,), params.ciphertext_noise_sigma, py_rng)[0])
         C1[i] = (pk_rj.T @ s + e) % q
         C2[i] = (int(u_pke @ s) + e_prime + int(b) * half_q) % q
 

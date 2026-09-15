@@ -30,5 +30,7 @@ export const api = {
   attackForward: (body) => post("/attack/forward", body),
   attackForwardSweep: (body) => post("/attack/forward-sweep", body),
   attackForwardFairness: (body) => post("/attack/forward-fairness", body),
+  attackForwardE2E: (body) => post("/attack/forward-e2e", body),
+  attackForwardE2EMulti: (body) => post("/attack/forward-e2e-multi", body),
   attackSpec: (body) => post("/attack/spec", body),
 };

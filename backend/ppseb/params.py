@@ -48,6 +48,19 @@ class Params:
             basis), which would make the threshold degenerate before any
             KeyExt is even invoked. See usability_threshold's own docstring
             for the full derivation and the C=1 comparison it also reports.
+    ciphertext_noise_sigma : the noise width scheme.py adds to PEKS/record
+            ciphertexts (CT1/CT2/Trap's inner product, and the record PKE) —
+            a DIFFERENT width from `sigma` above (that one governs lattice
+            SAMPLING quality; this one governs Verify's decode margin).
+            Exposed here (not a hardcoded scheme.py constant) because PATCH
+            05's end-to-end attack discovered they interact: PATCH 03's
+            dimension-aware sigma (needed for NewBasisDel's own correctness)
+            makes Trap's own norm grow too, which — at a FIXED ciphertext
+            noise width — can blow Verify's decode margin and break even the
+            LEGITIMATE doctor's search. attacks.end_to_end scales this field
+            down in proportion to how far sigma was scaled up, preserving
+            the original, already-tuned margin rather than fixing one bound
+            by breaking another.
     """
 
     n: int = 4
@@ -55,6 +68,7 @@ class Params:
     sigma: float = 4.0
     l: int = 10
     usability_C: float = 0.2
+    ciphertext_noise_sigma: float = 0.4
     m: int = field(default=0)  # 0 => "derive it"
 
     def __post_init__(self) -> None:
@@ -80,6 +94,8 @@ class Params:
             problems.append("l must be >= 1.")
         if self.usability_C <= 0:
             problems.append("usability_C must be positive.")
+        if self.ciphertext_noise_sigma <= 0:
+            problems.append("ciphertext_noise_sigma must be positive.")
         if self.m % self.n != 0:
             problems.append(
                 f"m={self.m} is not a multiple of n={self.n}; H2's block-diagonal "

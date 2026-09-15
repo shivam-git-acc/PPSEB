@@ -37,6 +37,16 @@ export default function ForwardSecTab({ onTrace, initialized }) {
   const [fairnessError, setFairnessError] = useState(null);
   const [fairnessResult, setFairnessResult] = useState(null);
 
+  const [e2eJ, setE2eJ] = useState(3);
+  const [e2eLoading, setE2eLoading] = useState(false);
+  const [e2eError, setE2eError] = useState(null);
+  const [e2eResult, setE2eResult] = useState(null);
+  const [e2eSelectedPeriod, setE2eSelectedPeriod] = useState(null);
+
+  const [e2eMultiLoading, setE2eMultiLoading] = useState(false);
+  const [e2eMultiError, setE2eMultiError] = useState(null);
+  const [e2eMultiResult, setE2eMultiResult] = useState(null);
+
   const run = async () => {
     setLoading(true);
     setError(null);
@@ -74,6 +84,35 @@ export default function ForwardSecTab({ onTrace, initialized }) {
       setFairnessError(String(e.message || e));
     } finally {
       setFairnessLoading(false);
+    }
+  };
+
+  const runE2E = async () => {
+    setE2eLoading(true);
+    setE2eError(null);
+    setE2eSelectedPeriod(null);
+    try {
+      const res = await api.attackForwardE2E({ J: e2eJ, n: 4, seed: Math.floor(Math.random() * 1e6), reducer_name: "bkz" });
+      setE2eResult(res.result);
+      onTrace(res.trace);
+    } catch (e) {
+      setE2eError(String(e.message || e));
+    } finally {
+      setE2eLoading(false);
+    }
+  };
+
+  const runE2EMulti = async () => {
+    setE2eMultiLoading(true);
+    setE2eMultiError(null);
+    try {
+      const res = await api.attackForwardE2EMulti({ J: e2eJ, seed: Math.floor(Math.random() * 1e6), reducer_name: "bkz" });
+      setE2eMultiResult(res.result);
+      onTrace(res.trace);
+    } catch (e) {
+      setE2eMultiError(String(e.message || e));
+    } finally {
+      setE2eMultiLoading(false);
     }
   };
 
@@ -130,6 +169,156 @@ export default function ForwardSecTab({ onTrace, initialized }) {
           trapdoor, the forward-security question doesn't even apply. Every number below is
           <b> derived from the measured run</b>, never assumed.
         </p>
+      </Card>
+
+      <Card title="End-to-end attack" subtitle="Upgrades the norm proxy above to a FUNCTIONAL demonstration: real search, real decrypt, on a frozen database">
+        <p className="text-sm text-ink-300 leading-relaxed mb-3">
+          Builds the honest doctor's real searchable database at every period and FREEZES it,
+          evolves the key forward to period J (where it gets stolen), then lets the attacker —
+          holding only the stolen key and public data — reconstruct an earlier basis and run the
+          <b> exact same</b> search and decrypt code the doctor used, against the untouched frozen
+          ciphertexts. The attacker never regenerates anything — success means the SAME sequence
+          number N0 the doctor found (Level 2), and optionally the SAME plaintext (Level 3). This
+          can show the norm proxy above was wrong in either direction.
+        </p>
+        <div className="flex items-end gap-4 flex-wrap">
+          <label className="block">
+            <div className="text-xs text-ink-400 mb-1">Periods (J)</div>
+            <input type="number" min={2} max={4} value={e2eJ} onChange={(e) => setE2eJ(Number(e.target.value))}
+              className="mono text-sm bg-ink-900 border border-ink-700 rounded px-2 py-1.5 w-20" />
+          </label>
+          <PrimaryButton onClick={runE2E} disabled={!initialized || e2eLoading}>
+            {e2eLoading ? "Running (builds + attacks every period)…" : "Run end-to-end attack (n=4)"}
+          </PrimaryButton>
+          <SecondaryButton onClick={runE2EMulti} disabled={!initialized || e2eMultiLoading}>
+            {e2eMultiLoading ? "Comparing n=4 vs n=8 (can take a few minutes)…" : "Compare n=4 vs n=8"}
+          </SecondaryButton>
+        </div>
+        <ErrorBanner message={e2eError} />
+
+        {e2eResult && (
+          <div className="mt-4 space-y-4">
+            <div className="text-xs text-ink-500 leading-relaxed border-l-2 border-ink-700 pl-3">
+              {e2eResult.level3_reachable_in_principle
+                ? "Paper audit: Decrypt(CM0, j, SK_r||j) takes only the period secret key — Level 3 is reachable in principle if the recovered basis is short enough."
+                : "Paper audit: Level 3 is not reachable by this attack (a separate secret Decrypt needs is untouched by the forward-security break)."}
+            </div>
+
+            {/* timeline */}
+            <div className="flex items-center overflow-x-auto pb-2">
+              {e2eResult.rows.map((r, idx) => {
+                const broke = r.level2_search_break;
+                const selected = e2eSelectedPeriod === r.period;
+                return (
+                  <div key={r.period} className="flex items-center shrink-0">
+                    <button
+                      onClick={() => setE2eSelectedPeriod(r.period)}
+                      className={`flex flex-col items-center justify-center w-24 h-16 rounded border-2 transition-colors ${
+                        selected ? "border-signal-blue" : broke ? "border-signal-green/70 bg-signal-green/10" : "border-ink-700 bg-ink-900"
+                      }`}
+                    >
+                      <span className="text-xs text-ink-300">period {r.period}</span>
+                      <span className="text-[10px] text-ink-500">frozen DB</span>
+                      <span className={`text-[10px] font-medium ${broke ? "text-signal-green" : "text-ink-500"}`}>
+                        {broke ? "L2 broken" : "survives"}
+                      </span>
+                    </button>
+                    {idx < e2eResult.rows.length - 1 && <div className="w-6 h-px bg-ink-700 mx-1" />}
+                  </div>
+                );
+              })}
+              <div className="w-6 h-px bg-signal-red/60 mx-1" />
+              <div className="flex flex-col items-center justify-center w-32 h-16 rounded border-2 border-signal-red/60 bg-signal-red/10 shrink-0">
+                <span className="text-xs text-signal-red">period {e2eResult.J}</span>
+                <span className="text-[10px] text-signal-red">attacker steals SK here</span>
+              </div>
+            </div>
+
+            {e2eSelectedPeriod != null && (() => {
+              const row = e2eResult.rows.find((r) => r.period === e2eSelectedPeriod);
+              if (!row) return null;
+              return (
+                <div className="trace-event-enter border border-ink-800 rounded-lg p-4 space-y-3">
+                  <div className="text-sm text-ink-200">
+                    Honest doctor at period {row.period} found N0=<span className="mono">{row.N0_legit}</span> using
+                    the real SK_r|{row.period}. Attacker, with only SK_r|{e2eResult.J} from {row.periods_back} period(s)
+                    later, reached back and {row.level2_search_break ? <b className="text-signal-green">recovered the SAME N0</b> : <b className="text-ink-400">could not reproduce it</b>}.
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                    <div className="border border-ink-800 rounded p-2">
+                      <div className="text-ink-500 uppercase text-[10px] mb-1">L1 · norm proxy</div>
+                      <Badge tone={row.level1_norm_ok ? "green" : "amber"}>{row.level1_norm_ok ? "short enough" : "exceeds threshold"}</Badge>
+                      <div className="mono text-ink-400 mt-1">{row.gs_norm.toFixed(2)} vs {row.threshold.toFixed(2)}</div>
+                    </div>
+                    <div className="border border-ink-800 rounded p-2">
+                      <div className="text-ink-500 uppercase text-[10px] mb-1">L2 · search</div>
+                      <Badge tone={row.level2_search_break ? "green" : "neutral"}>{row.level2_search_break ? "SEARCH RECOVERED" : "failed / no match"}</Badge>
+                      <div className="mono text-ink-400 mt-1">N0*={String(row.N0_star)} vs N0={String(row.N0_legit)}</div>
+                    </div>
+                    <div className="border border-ink-800 rounded p-2">
+                      <div className="text-ink-500 uppercase text-[10px] mb-1">L3 · decrypt</div>
+                      <Badge tone={row.level3_plaintext_break ? "green" : "neutral"}>
+                        {row.level3_plaintext_break ? "PLAINTEXT RECOVERED" : row.level3_reachable === false ? "not reachable" : "not reached"}
+                      </Badge>
+                    </div>
+                    <div className="border border-ink-800 rounded p-2">
+                      <div className="text-ink-500 uppercase text-[10px] mb-1">reducer</div>
+                      <div className="mono text-ink-300">{row.reducer_method}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            <div className="flex items-start gap-3">
+              <Badge tone={e2eResult.any_l2_break ? "green" : "neutral"}>
+                {e2eResult.any_l2_break ? "BROKEN (functional)" : "SURVIVES (functional)"}
+              </Badge>
+              <p className="text-sm text-ink-300">{e2eResult.conclusion}</p>
+            </div>
+
+            {e2eResult.caveats.map((c, i) => (
+              <div key={i} className="text-xs text-amber-400 bg-amber-500/10 border border-amber-600/30 rounded px-3 py-2.5 leading-relaxed">
+                ⚠ {c}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {e2eMultiError && <ErrorBanner message={e2eMultiError} />}
+        {e2eMultiResult && (
+          <Card title="n=4 vs n=8 (functional)" className="mt-4">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm mono">
+                <thead>
+                  <tr className="text-left text-ink-500 text-xs uppercase">
+                    <th className="pb-2 pr-4">n</th>
+                    <th className="pb-2 pr-4">any L2 break?</th>
+                    <th className="pb-2">broken periods (L2 / L3)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {e2eMultiResult.per_n.map((r) => (
+                    <tr key={r.n} className="border-t border-ink-800">
+                      <td className="py-1.5 pr-4">{r.n}</td>
+                      {r.error ? (
+                        <td className="py-1.5 text-signal-red" colSpan={2}>error: {r.error}</td>
+                      ) : (
+                        <>
+                          <td className={`py-1.5 pr-4 ${r.any_l2_break ? "text-signal-green" : "text-ink-500"}`}>{String(r.any_l2_break)}</td>
+                          <td className="py-1.5">{JSON.stringify(r.broken_periods_l2)} / {JSON.stringify(r.broken_periods_l3)}</td>
+                        </>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-sm text-ink-300 mt-3">{e2eMultiResult.summary}</p>
+          </Card>
+        )}
+
+        {!initialized && <div className="text-xs text-ink-500 mt-2">Initialize params in the left rail first.</div>}
       </Card>
 
       <Card title="Run experiment">
