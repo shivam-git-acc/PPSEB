@@ -260,7 +260,11 @@ export default function ForwardSecTab({ onTrace, initialized, params }) {
                 return (
                   <div key={r.period} className="flex items-center shrink-0">
                     <button
-                      onClick={() => setE2eSelectedPeriod(r.period)}
+                      onClick={() => {
+                        setE2eSelectedPeriod(r.period);
+                        // eslint-disable-next-line no-console
+                        console.log(`[end-to-end] period ${r.period} full row:`, r);
+                      }}
                       className={`flex flex-col items-center justify-center w-24 h-16 rounded border-2 transition-colors ${
                         selected ? "border-signal-blue" : toneClass
                       }`}
@@ -320,22 +324,64 @@ export default function ForwardSecTab({ onTrace, initialized, params }) {
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
                       <div className="border border-ink-800 rounded p-2">
+                        <div className="text-ink-500 uppercase text-[10px] mb-1">period_gs (attacker)</div>
+                        <div className="mono text-ink-300">{row.gs_norm.toFixed(2)}</div>
+                        <div className="text-ink-600 text-[10px]">vs threshold {row.threshold.toFixed(2)}</div>
+                      </div>
+                      <div className="border border-ink-800 rounded p-2">
                         <div className="text-ink-500 uppercase text-[10px] mb-1">honest word_gs</div>
                         <div className="mono text-ink-300">{row.honest_word_gs?.toFixed(2)}</div>
                         <div className="text-ink-600 text-[10px]">vs threshold {row.threshold.toFixed(2)}</div>
                       </div>
                       <div className="border border-ink-800 rounded p-2">
                         <div className="text-ink-500 uppercase text-[10px] mb-1">attacker word_gs</div>
-                        <div className="mono text-ink-300">{row.word_gs != null ? row.word_gs.toFixed(2) : row.word_gs_error ? "error" : "—"}</div>
+                        <div className="mono text-ink-300">{row.word_gs != null ? row.word_gs.toFixed(2) : "—"}</div>
                         <div className="text-ink-600 text-[10px]">predicted usable: {String(row.word_pred_usable)}</div>
                       </div>
-                      <div className="border border-ink-800 rounded p-2 col-span-2">
-                        <div className="text-ink-500 uppercase text-[10px] mb-1">prediction vs measured L2</div>
-                        <Badge tone={row.l2_matches_wordpred === false ? "amber" : row.l2_matches_wordpred === true ? "green" : "neutral"}>
-                          {row.l2_matches_wordpred === false ? "DISAGREE — inspect" : row.l2_matches_wordpred === true ? "agree" : "n/a (off-lattice)"}
+                      <div className="border border-ink-800 rounded p-2">
+                        <div className="text-ink-500 uppercase text-[10px] mb-1">word_gs_error</div>
+                        <div className="mono text-ink-400 text-[10px] break-words">{row.word_gs_error ?? "none"}</div>
+                      </div>
+                    </div>
+                    <div className="mt-2 text-xs">
+                      <Badge tone={row.l2_matches_wordpred === false ? "amber" : row.l2_matches_wordpred === true ? "green" : "neutral"}>
+                        {row.l2_matches_wordpred === false ? "DISAGREE — inspect" : row.l2_matches_wordpred === true ? "agree" : "n/a (off-lattice)"}
+                      </Badge>
+                      <span className="text-ink-400 ml-2">
+                        {row.l2_matches_wordpred === false && row.word_pred_usable === false && row.level2_search_break
+                          ? "Direction: word-basis predicts UNUSABLE (over threshold), but Level 2 measured a BREAK. This reflects NewBasisDel's own re-sampling variance (this cross-check uses a fresh, independent Gaussian draw, not the same one the real attack used) — it is not automatic proof the break is fake; verify with a per-period false-accept check before trusting either way."
+                          : row.l2_matches_wordpred === false && row.word_pred_usable && !row.level2_search_break
+                          ? "Direction: word-basis predicts USABLE (under threshold), but Level 2 measured NO break. Possible SamplePre/search issue — worth investigating."
+                          : row.l2_matches_wordpred === true
+                          ? "The independent word-basis prediction and the measured Level 2 outcome agree."
+                          : ""}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-ink-800 pt-3">
+                    <div className="text-ink-500 uppercase text-[10px] mb-2">
+                      Negative controls at THIS period (not the run-level aggregate)
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 text-xs">
+                      <div className={`border rounded p-2 ${row.control_garbage_passed ? "border-signal-red bg-signal-red/10" : "border-ink-800"}`}>
+                        <div className="text-ink-500 uppercase text-[10px] mb-1">garbage basis (no secret)</div>
+                        <Badge tone={row.control_garbage_passed ? "red" : "green"}>
+                          {row.control_garbage_passed ? "UNEXPECTEDLY PASSED" : "failed, as required"}
+                        </Badge>
+                      </div>
+                      <div className={`border rounded p-2 ${row.control_wrong_period_passed ? "border-signal-red bg-signal-red/10" : "border-ink-800"}`}>
+                        <div className="text-ink-500 uppercase text-[10px] mb-1">wrong-period key (SK_r|{e2eResult.J})</div>
+                        <Badge tone={row.control_wrong_period_passed ? "red" : "green"}>
+                          {row.control_wrong_period_passed ? "UNEXPECTEDLY PASSED" : "failed, as required"}
                         </Badge>
                       </div>
                     </div>
+                    {!row.control_ok_this_period && (
+                      <p className="text-xs text-signal-red mt-2">
+                        A negative control passed at THIS period — the Level 2 match here is vacuous, not a genuine break.
+                      </p>
+                    )}
                   </div>
                 </div>
               );

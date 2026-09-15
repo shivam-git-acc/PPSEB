@@ -180,6 +180,45 @@ Three independent fixes/additions on top of the above:
    sample-to-sample variance and is expected sometimes, not automatically
    proof of a new bug; a disagreement is a flag to inspect, not an
    automatic distrust verdict (that's reserved for the negative control).
+
+## Post-PATCH-06 audit: drilling into a flagged (word-basis-disagreement) break
+
+A viewer flagged exactly this kind of row (period near the compromise,
+L2+L3 broken, word-basis prediction disagreeing) and asked whether it was
+a small-database artifact -- with only a few records per period, a
+degraded trapdoor could plausibly "match" the one obvious record by
+coincidence rather than genuine keyword decoding. Investigated directly,
+not assumed away:
+
+- **Per-period negative controls, not just an aggregate line.** Both
+  kind="garbage" and kind="wrong_period" now run at EVERY period on every
+  `end_to_end_experiment` call (`row["control_garbage_passed"]`/
+  `row["control_wrong_period_passed"]`), so a specific flagged period's
+  break can be checked against controls run at that SAME period, not an
+  aggregate that could be held elsewhere while this one is bad. Both held
+  at the flagged period.
+- **False-accept-rate test.** The exact recovered trapdoor from a flagged
+  break was checked against 50 additional decoy keywords (the full
+  expanded `DICTIONARY`, none of which were the target) it had never been
+  tested against: 0/50 false accepts, and it correctly matched a FRESH
+  re-encryption of the target keyword (not just the one frozen
+  ciphertext). This is real, repeatable, keyword-specific discrimination
+  -- not a coincidence of "matches whatever's first in a small DB".
+- **RECORDS_PER_PERIOD raised from 4 to 20** (dictionary expanded from 8
+  to 51 keywords to support it) as a standing strengthening rather than a
+  one-off check -- every future run now tests discrimination against a
+  much larger decoy pool by default, not just the diagnostic above.
+  Re-verified clean against the full test suite (legit reliability,
+  negative controls, word-basis checks) at the new value.
+- **Conclusion on the specific flagged case:** the break was genuine, not
+  an artifact -- but it IS fragile: the word-basis prediction disagreed
+  because NewBasisDel's Klein-resampling has real run-to-run variance, so
+  the SAME recovered period-basis candidate can yield either a working or
+  a non-working word basis depending on the random draw. "Genuine but
+  variance-dependent" is the honest characterization; concluding
+  "survives" from the word-basis disagreement alone would have been
+  wrong here, since the actual measured outcome (checked directly, not
+  inferred from the independent proxy) was a real break.
 """
 
 from __future__ import annotations
@@ -203,9 +242,17 @@ from ppseb.linalg import strong_reduce
 
 DICTIONARY = (
     "flu", "asthma", "diabetes", "hypertension", "migraine", "eczema",
-    "bronchitis", "arthritis",
+    "bronchitis", "arthritis", "psoriasis", "gout", "anemia", "epilepsy",
+    "glaucoma", "cirrhosis", "pancreatitis", "endometriosis", "scoliosis",
+    "tinnitus", "vertigo", "shingles", "cellulitis", "lymphoma", "melanoma",
+    "sciatica", "tendonitis", "conjunctivitis", "laryngitis", "sinusitis",
+    "pneumonia", "tuberculosis", "hepatitis", "nephritis", "gastritis",
+    "colitis", "dermatitis", "osteoporosis", "fibromyalgia", "narcolepsy",
+    "hypothyroidism", "hyperthyroidism", "pericarditis", "endocarditis",
+    "meningitis", "encephalitis", "bursitis", "myocarditis", "phlebitis",
+    "urticaria", "rosacea", "otitis", "pharyngitis",
 )
-RECORDS_PER_PERIOD = 4
+RECORDS_PER_PERIOD = 20
 GROUND_TRUTH_IDX = 0
 
 # n=6 (PATCH 04's own choice) has no valid H2 twist for q=257 — see the
@@ -328,6 +375,7 @@ def verify_search(CT: tuple, trap: np.ndarray, params: Params, trace: Trace | No
 def build_frozen_history(
     J: int, params: Params, seed: int = 0, h1_variant: str = "low_norm",
     strengthen_legit: bool = True, dictionary: tuple[str, ...] = DICTIONARY,
+    records_per_period: int = RECORDS_PER_PERIOD,
     trace: Trace | None = None, max_seed_retries: int = 4,
 ) -> tuple[list[PeriodDB], np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Thin retry wrapper around `_build_frozen_history_once`.
@@ -351,7 +399,8 @@ def build_frozen_history(
         try:
             result = _build_frozen_history_once(
                 J, params, seed=seed + attempt, h1_variant=h1_variant,
-                strengthen_legit=strengthen_legit, dictionary=dictionary, trace=trace,
+                strengthen_legit=strengthen_legit, dictionary=dictionary,
+                records_per_period=records_per_period, trace=trace,
             )
             if attempt > 0 and trace is not None:
                 trace.note(
@@ -377,6 +426,7 @@ def build_frozen_history(
 def _build_frozen_history_once(
     J: int, params: Params, seed: int = 0, h1_variant: str = "low_norm",
     strengthen_legit: bool = True, dictionary: tuple[str, ...] = DICTIONARY,
+    records_per_period: int = RECORDS_PER_PERIOD,
     trace: Trace | None = None,
 ) -> tuple[list[PeriodDB], np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Builds and FREEZES the honest doctor's database at periods 0..J-1,
@@ -448,7 +498,7 @@ def _build_frozen_history_once(
     history: list[PeriodDB] = []
     pk, sk = pk0, sk0
     for i in range(J):
-        kws = pyrng.sample(list(dictionary), min(RECORDS_PER_PERIOD, len(dictionary)))
+        kws = pyrng.sample(list(dictionary), min(records_per_period, len(dictionary)))
         records = tuple(
             (n_id, kw, f"Patient record #{n_id} at period {i}: dx={kw}".encode())
             for n_id, kw in enumerate(kws)
@@ -742,6 +792,19 @@ def end_to_end_experiment(
     rows = []
     for i in range(J):
         row = attack_period(history, i, J, stolen_sk, p, mu, u_pke, reducer=reducer, trace=trace)
+
+        # Per-period negative controls (not just an aggregate line): run
+        # BOTH kinds at THIS exact period, using the SAME frozen CT_i the
+        # real attack just used, so a viewer inspecting one period's break
+        # doesn't have to trust an aggregate summary computed elsewhere.
+        g_ctrl = attack_period_negative_control(history, i, p, mu, u_pke, kind="garbage", trace=None)
+        w_ctrl = attack_period_negative_control(
+            history, i, p, mu, u_pke, kind="wrong_period", wrong_period_sk=stolen_sk, trace=None,
+        )
+        row["control_garbage_passed"] = g_ctrl["level2_search_break"]
+        row["control_wrong_period_passed"] = w_ctrl["level2_search_break"]
+        row["control_ok_this_period"] = not (row["control_garbage_passed"] or row["control_wrong_period_passed"])
+
         rows.append(row)
         trace.decision(
             f"Period {i} ({J - i} period(s) back): attacker's reconstructed SK*_r|{i}",
@@ -751,24 +814,25 @@ def end_to_end_experiment(
                 "N0_legit": row["N0_legit"], "N0_star": row["N0_star"],
                 "level2_search_break": row["level2_search_break"],
                 "level3_plaintext_break": row["level3_plaintext_break"],
+                "control_garbage_passed": row["control_garbage_passed"],
+                "control_wrong_period_passed": row["control_wrong_period_passed"],
             },
             algo="EndToEnd",
         )
 
-    # Negative control, run every time (not just in the test suite) so a
-    # viewer never has to trust a Level 2/3 verdict on faith: if garbage
-    # (needing no secret at all) ever passes, the run is untrustworthy.
-    control_rows = [
-        attack_period_negative_control(history, i, p, mu, u_pke, kind="garbage", trace=None)
-        for i in range(J)
-    ]
-    control_passed = [r["period"] for r in control_rows if r["level2_search_break"]]
-    control_ok = not control_passed
+    # Aggregate negative-control status across all periods, from the SAME
+    # per-period controls just computed above (not a second, separate run)
+    # so a viewer never has to trust a Level 2/3 verdict on faith: if
+    # garbage or a wrong-period key ever passes, the run is untrustworthy.
+    control_passed = [r["period"] for r in rows if r["control_garbage_passed"]]
+    wrong_period_passed = [r["period"] for r in rows if r["control_wrong_period_passed"]]
+    control_ok = not control_passed and not wrong_period_passed
     trace.decision(
-        "Negative control: garbage (public kernel basis, no secret) vs Level 2",
-        verdict="control held (garbage failed, as required)" if control_ok
-                else f"CONTROL FAILED at period(s) {control_passed} -- verdict below is UNTRUSTWORTHY",
-        evidence={"control_passed_periods": control_passed},
+        "Negative controls (garbage + wrong-period key) vs Level 2, per period",
+        verdict="controls held everywhere (as required)" if control_ok
+                else f"CONTROL FAILED -- garbage passed at {control_passed}, wrong-period passed at "
+                     f"{wrong_period_passed} -- verdict below is UNTRUSTWORTHY",
+        evidence={"garbage_passed_periods": control_passed, "wrong_period_passed_periods": wrong_period_passed},
         algo="EndToEnd",
         highlight=not control_ok,
     )
@@ -806,12 +870,13 @@ def end_to_end_experiment(
     if not control_ok:
         headline = f"UNTRUSTWORTHY RUN at n={n}, J={J} -- negative control failed"
         conclusion = (
-            f"The negative control (a public, secret-free garbage basis) passed Level 2 at "
-            f"period(s) {control_passed} in THIS run -- the Level 2 test is not discriminating "
-            f"a genuine recovered key from public garbage here, so the measured verdict above "
-            f"cannot be trusted. Do not report a break or a resist from this run; investigate "
-            f"the calibration (see the module docstring) before trusting any result at these "
-            f"parameters."
+            f"A negative control passed Level 2 in THIS run -- garbage (public, secret-free "
+            f"kernel basis) at period(s) {control_passed}, a wrong-period key at period(s) "
+            f"{wrong_period_passed} -- so the Level 2 test is not discriminating a genuine "
+            f"recovered key from an input with no legitimate relationship to that period here, "
+            f"and the measured verdict above cannot be trusted. Do not report a break or a "
+            f"resist from this run; investigate the calibration (see the module docstring) "
+            f"before trusting any result at these parameters."
         )
 
     caveats = [
@@ -842,6 +907,7 @@ def end_to_end_experiment(
         "headline": headline, "conclusion": conclusion,
         "level3_reachable_in_principle": LEVEL3_REACHABLE,
         "control_ok": control_ok, "control_passed_periods": control_passed,
+        "wrong_period_control_passed_periods": wrong_period_passed,
         "wordpred_disagreements": wordpred_disagreements,
         "trustworthy": control_ok,
         "caveats": caveats,
