@@ -56,6 +56,7 @@ export default function App() {
     onTrace: (t) => handleTrace(t, TABS.find((x) => x.id === tab)?.label),
     initialized,
     maxPeriod,
+    params,
   };
 
   return (

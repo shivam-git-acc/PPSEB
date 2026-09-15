@@ -53,15 +53,133 @@ power of 2. PATCH 04's own n=6 is therefore NOT usable here — not a search
 failure, a genuine non-existence — so this module compares n=4 against n=8
 instead (both powers of 2), documented rather than silently swapped.
 
+**Reconciling with PATCH 04's "resists_symmetric_bkz" (n=4/n=6, norm proxy
+only):** `three_way_reduction_sweep` never tested n=8 at all (its own
+`DEFAULT_THREE_WAY_N_VALUES = (4, 6)`, bounded by measured BKZ cost at
+n=8), so there is no shared n between the two patches' fair-BKZ runs
+except n=4 — "n=6 held" says nothing directly about n=8. Before the
+NewBasisDel-laundering fix above, this module's own functional test
+reported a break at EVERY tested n (4 AND 8, identically), which is now
+understood to be the SAME vacuous-criterion bug PATCH 04 never hit
+(PATCH 04 never calls Trapdoor/NewBasisDel at all — its "broken" verdict
+is purely `reduced_norm <= threshold` on the RAW recovered candidate).
+Post-fix, this module's own n=4 runs land on a small, seed-dependent,
+genuine break confined to the period immediately before the theft (never
+2 periods back, in every seed sampled), and n=8 has shown none in the
+same sweep — consistent with PATCH 04's fair-BKZ norm-proxy picture
+("mostly resists, at small dimensions") rather than contradicting it. The
+apparent "n=6 held, n=8 broke" tension was the vacuous-criterion bug
+wearing a dimension-shaped costume, not a real dimension effect.
+
 **A second interaction discovered the same way:** PATCH 03's dimension-aware
 sigma (needed for NewBasisDel's own correctness) makes Trap's own norm grow,
 which — at the ORIGINAL fixed ciphertext-noise width — can blow Verify's
 decode margin and break even the LEGITIMATE doctor's own search (never
 visible before PATCH 05, which is the first patch to actually run PEKS/
-Trapdoor/Verify rather than just measure norms). Fixed by exposing the
-ciphertext noise width as `Params.ciphertext_noise_sigma` and scaling it down
-in proportion to how far sigma was scaled up (`build_frozen_history`),
-preserving the original, already-tuned sigma*noise product.
+Trapdoor/Verify rather than just measure norms).
+
+**Two real, confirmed bugs this surfaced (audit-caught, not self-caught):**
+
+1. The first fix attempted for the sigma/noise interaction above scaled
+   `ciphertext_noise_sigma` DOWN in proportion to how far sigma was scaled
+   up, preserving the original sigma*noise product. That made the
+   legitimate doctor's search reliable again, but pushed the noise so
+   small that discrete Gaussian samples are essentially always exactly 0
+   — a symptom of the bug below, not yet its cause. Mitigated (not fixed
+   on its own) by CALIBRATING `ciphertext_noise_sigma` per run against
+   this run's own measured legitimate Trap norm (`TARGET_MARGIN_STD`),
+   with a longer keyword test length (`END_TO_END_L`, up from the
+   scheme's default l=10) to sharpen the all-slots-must-pass
+   discrimination. This keeps the legitimate doctor's margin comparable
+   across dimensions, but does NOT by itself fix vacuousness — see (2).
+
+2. **The actual root cause, found only by running the mandated negative
+   control:** even with (1) in place, a candidate with NO relationship to
+   the real key at all — the raw, unreduced kernel basis of pk_r|i,
+   computable by ANYONE from the public key alone, no theft needed —
+   still passed Level 2 as often as a genuine recovered candidate,
+   *including at n=4/n=8 with no forward-security chain involved at all*
+   (confirmed directly against a fresh TrapGen root at default params:
+   see the audit notes). The cause is in `ppseb.samplers.new_basis_del`,
+   not in this module's noise tuning: its re-randomization step draws
+   `resample_factor * m` fresh discrete-Gaussian candidates of a FIXED
+   width `sigma` and greedily keeps the shortest independent set,
+   regardless of how good or bad the caller's own input trapdoor was.
+   NewBasisDel's own correctness precondition — sigma >=
+   gs_norm(input_basis) * omega(sqrt(log m)) — is silently violated
+   whenever the input is oversized (garbage) or off-lattice
+   (wrong-period), and the implementation does not reject that; it just
+   returns something, laundering an unusable input into an
+   apparently-usable trapdoor. That precondition is EXACTLY Level 1's
+   `usability_threshold` (PATCH 02 §A.2) and the lattice-`membership_ok`
+   check already computed per candidate — they were being measured but
+   never used to gate whether Level 2 was even attempted. Fixed in
+   `_test_candidate`: Level 2 is now skipped (reported as no break, with
+   `level2_skipped_reason` set) unless the candidate clears BOTH Level 1
+   and lattice membership first. This is the "stricter match definition"
+   forced by the audit — passing Level 2 now requires genuinely passing
+   Level 1 too, not just an N0 coincidence.
+
+Both negative controls (`attack_period_negative_control`, kind="garbage"
+and kind="wrong_period") are exercised in tests/test_end_to_end.py and
+must keep failing reliably (checked across multiple seeds and both tested
+dimensions) for any Level 2/3 result here to mean anything. Post-fix,
+n=4 shows a genuine (small, seed-dependent) Level 2 break confined to one
+period back from the theft; n=8 shows none in the same sweep — a
+dimension-dependent pattern consistent with the R^-1-recovered candidate's
+norm growing faster than the threshold as m grows, not the artifact the
+pre-fix code was reporting (which broke at EVERY tested dimension,
+identically to the negative controls, because it wasn't measuring
+anything real).
+
+**Level 2 vs Level 3, checked honestly (audit point 4):** `decrypt_record`
+always calls `sample_pre` fresh on the FROZEN `CM` entry (the same object,
+by identity, from `history[i].CM` — never regenerated) using the
+candidate `sk_star`; its decode bound is enforced by the same
+noise-accumulation mechanism as Verify's (`<e, t0>` grows with the
+recovered basis's own norm), not a magnitude check that could pass
+vacuously. Because a record is ~40-50 bytes (320-400 independent decode
+bits, all of which must be correct) versus Verify's l=30 slots, Level 3
+is a strictly harder bar — confirmed empirically, not just by inspection:
+a 32-seed sweep at n=4 found 14 Level 2 breaks, of which 3 broke Level 2
+WITHOUT breaking Level 3 ("search recovered, plaintext did not"). If L2
+and L3 were secretly the same test, that split could not happen.
+
+## PATCH 06 — parameterization, every-period reporting, word-basis cross-check
+
+Three independent fixes/additions on top of the above:
+
+1. **Hardcoded n/J were a FRONTEND bug**, not a backend one: this module's
+   `end_to_end_experiment`/`end_to_end_multi_n` already took `n` and `J` as
+   real parameters; `ForwardSecTab.jsx`'s button handlers ignored them
+   (`n: 4` literal, and the comparison table using a backend-default n
+   list independent of the UI). Fixed in the frontend; documented here so
+   the backend/frontend split of that bug is on record.
+2. **Every past period is reported**, not a cherry-picked subset — `rows`
+   always has exactly one entry per period `0..J-1` (unchanged behavior,
+   confirmed by `test_every_past_period_reported`).
+3. **The negative control now runs on EVERY call to `end_to_end_experiment`**
+   (kind="garbage", every period), not just in the test suite — if it ever
+   passes, the whole run is bannered `UNTRUSTWORTHY RUN` in the headline
+   and `trustworthy`/`control_ok` are set to `False`, rather than reporting
+   a break/resist verdict a viewer would have no way to distrust.
+4. **Word-basis cross-check (§6.5):** `_basis_chain_norms` independently
+   re-derives the WORD basis (`beta = H2(keyword, period)`, one more
+   `NewBasisDel` delegation past the period basis) that `SamplePre`
+   actually consumes, and predicts Level 2 success from `word_gs <=
+   threshold` — a second, independent signal alongside the measured
+   same-N0 outcome. Every row carries both the honest baseline
+   (`honest_period_gs`/`honest_word_gs`/`honest_trap_norm`/
+   `honest_beta_norm`, computed once during history construction) and the
+   attacker's own (`word_gs`/`trap_norm_predicted`/`beta_norm`), plus
+   `word_pred_usable` and `l2_matches_wordpred`. Disagreements are
+   surfaced (`wordpred_disagreements` at the run level, plus a caveat) for
+   inspection rather than silently trusted — since this is an
+   INDEPENDENT re-sample (fresh Gaussian draws, not a trace of the actual
+   Level 2 attempt), occasional disagreement reflects NewBasisDel's own
+   sample-to-sample variance and is expected sometimes, not automatically
+   proof of a new bug; a disagreement is a flag to inspect, not an
+   automatic distrust verdict (that's reserved for the negative control).
 """
 
 from __future__ import annotations
@@ -72,10 +190,10 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from ppseb.hashes import H1, H1_inverse
-from ppseb.linalg import centered_mod_q, gram_schmidt_norm, mat_mod_mixed
+from ppseb.hashes import H1, H1_inverse, H2, H2_inverse
+from ppseb.linalg import centered_mod_q, gram_schmidt_norm, kernel_basis_mod_q, mat_mod_mixed
 from ppseb.params import Params
-from ppseb.samplers import new_basis_del
+from ppseb.samplers import new_basis_del, sample_pre
 from ppseb.scheme import decrypt_record, encrypt_record, peks_encrypt, trapdoor, verify
 from ppseb.trace import Trace
 from ppseb.trapgen import trapgen
@@ -95,6 +213,20 @@ GROUND_TRUTH_IDX = 0
 # of 2 (compatible with q-1=256) and span the same "does it survive a
 # larger dimension" question PATCH 04's fairness sweep asked.
 DEFAULT_END_TO_END_N_VALUES = (4, 8)
+
+# Empirically calibrated (see build_frozen_history's audit note and PATCH 05
+# ChatOps notes): l=10 (the scheme default) cannot simultaneously give the
+# legitimate doctor a reliable pass AND reject a garbage/wrong-key trapdoor
+# reliably — the two Trap-norm populations aren't separated enough relative
+# to a 10-slot all-must-pass test. l=30 sharpens that discrimination.
+# TARGET_MARGIN_STD is the per-coordinate noise standard deviation (in units
+# of q) the calibration below aims for, relative to THIS RUN's own measured
+# legitimate Trap norm — chosen (by the same empirical sweep) to keep the
+# legitimate doctor's pass rate high while a garbage/wrong-key Trap (whose
+# norm this codebase's NewBasisDel construction still measurably — if not
+# hugely — inflates relative to a genuine recovery) fails reliably.
+END_TO_END_L = 30
+TARGET_MARGIN_STD = 34.0
 
 LEVEL3_REACHABLE = True
 LEVEL3_NOTE = (
@@ -144,6 +276,41 @@ def _hash_cm(CM: tuple) -> str:
     return h.hexdigest()
 
 
+def _basis_chain_norms(
+    pk_i: np.ndarray, sk_period: np.ndarray, keyword: str, period: int,
+    mu: np.ndarray, params: Params, pyrng: random.Random,
+) -> dict:
+    """PATCH 06 §6.5 — instruments the FULL delegation chain a candidate
+    basis actually goes through inside Trapdoor, which SamplePre does NOT
+    consume the period basis for: it consumes a WORD basis one MORE
+    NewBasisDel delegation downstream (beta = H2(keyword, period)). That
+    delegation GROWS the norm, so a period basis under threshold can still
+    yield an over-threshold word basis -- explaining any gap between
+    Level 1 (period-norm proxy) and Level 2 (actual search).
+
+    This recomputes new_basis_del/sample_pre INDEPENDENTLY of the real
+    Trapdoor() call used for the actual Level 2 attempt (fresh Gaussian
+    draws) -- by design (see the module docstring): it is a cross-check
+    against an independent prediction, not a trace of the exact call.
+    Raises (propagated to the caller) if sk_period isn't genuinely a basis
+    of L_perp_q(pk_i) -- e.g. a wrong-period candidate -- since no word
+    basis is well-defined to report in that case.
+    """
+    q = params.q
+    beta = H2(keyword, period, params)
+    beta_inv = H2_inverse(beta, q)
+    beta_inv = np.array([[int(x) for x in row] for row in (beta_inv % q)], dtype=np.int64)
+    sk_word = new_basis_del(pk_i, beta, sk_period, params.sigma, q, pyrng, R_inv=beta_inv)
+    A_w = (pk_i @ beta_inv) % q
+    trap = sample_pre(A_w, sk_word, mu, params.sigma, q, pyrng)
+    return {
+        "period_gs": gram_schmidt_norm(centered_mod_q(sk_period, q)),
+        "word_gs": gram_schmidt_norm(centered_mod_q(sk_word, q)),
+        "trap_norm": float(np.linalg.norm(trap.astype(float))),
+        "beta_norm": gram_schmidt_norm(centered_mod_q(beta, q)),
+    }
+
+
 def verify_search(CT: tuple, trap: np.ndarray, params: Params, trace: Trace | None = None) -> int | None:
     """Runs PPSEB.Verify over every entry of a (frozen) CT tuple and returns
     the sequence number N of the matching one, or None. This is the SAME
@@ -159,6 +326,55 @@ def verify_search(CT: tuple, trap: np.ndarray, params: Params, trace: Trace | No
 
 
 def build_frozen_history(
+    J: int, params: Params, seed: int = 0, h1_variant: str = "low_norm",
+    strengthen_legit: bool = True, dictionary: tuple[str, ...] = DICTIONARY,
+    trace: Trace | None = None, max_seed_retries: int = 4,
+) -> tuple[list[PeriodDB], np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Thin retry wrapper around `_build_frozen_history_once`.
+
+    The per-run noise calibration (module docstring's audit note) targets
+    a margin that is reliable but not guaranteed: a rare noise draw can
+    occasionally make even the LEGITIMATE doctor's own search fail (an
+    `AssertionError` from `_build_frozen_history_once`). Letting that
+    crash the whole experiment would be its own kind of dishonesty --
+    treating a setup hiccup as if it were a finding. Instead, retry with
+    seed+1, seed+2, ... (bounded by `max_seed_retries`); if every attempt
+    fails, the original error still propagates. This never touches the
+    ATTACKER's success criterion or which candidate gets tested -- it only
+    ensures the experimental setup itself succeeded, the same way a real
+    deployment would re-encrypt on a failed self-check rather than
+    silently operating on an unusable database. Any retry is reported via
+    `trace.note` so it stays visible, not silently absorbed.
+    """
+    last_error: AssertionError | None = None
+    for attempt in range(max_seed_retries + 1):
+        try:
+            result = _build_frozen_history_once(
+                J, params, seed=seed + attempt, h1_variant=h1_variant,
+                strengthen_legit=strengthen_legit, dictionary=dictionary, trace=trace,
+            )
+            if attempt > 0 and trace is not None:
+                trace.note(
+                    f"Retried history construction ({attempt} retry(ies)) after a legit-search "
+                    f"reliability failure",
+                    detail="The calibrated noise margin is reliable but not guaranteed; this "
+                           "run's original seed happened to draw noise that made the legitimate "
+                           "doctor's OWN search fail. Retried with a different seed rather than "
+                           "reporting a crash as a finding -- the attacker's candidate and success "
+                           "criterion are untouched by this.",
+                    data={"original_seed": seed, "used_seed": seed + attempt, "retries": attempt},
+                    algo="EndToEnd",
+                )
+            return result
+        except AssertionError as e:
+            if "legit doctor must find its own record" not in str(e):
+                raise
+            last_error = e
+    assert last_error is not None
+    raise last_error
+
+
+def _build_frozen_history_once(
     J: int, params: Params, seed: int = 0, h1_variant: str = "low_norm",
     strengthen_legit: bool = True, dictionary: tuple[str, ...] = DICTIONARY,
     trace: Trace | None = None,
@@ -178,24 +394,56 @@ def build_frozen_history(
     pyrng = random.Random(seed)
 
     pk0, sk0 = trapgen(params, rng, trace)
-    base_sigma, base_noise = params.sigma, params.ciphertext_noise_sigma
     params.sigma = sigma_for_params(sk0, params)
-    # PATCH 05 discovery: PATCH 03's dimension-aware sigma fixes NewBasisDel's
-    # OWN correctness, but Trap's norm scales with sigma too — at a FIXED
-    # ciphertext noise width, a larger sigma can blow Verify's decode margin
-    # and break even the LEGITIMATE doctor's own search (never an issue in
-    # PATCH 01-04, which only ever measured norms and never actually ran
-    # PEKS/Trapdoor/Verify). Rescale the noise width in proportion to how
-    # far sigma was scaled up, preserving the ORIGINAL (already-tuned)
-    # sigma*noise product rather than fixing one correctness bound by
-    # breaking another.
-    params.ciphertext_noise_sigma = base_noise * (base_sigma / params.sigma)
     if strengthen_legit:
         sk0, _method = strong_reduce(sk0)
         assert bool(np.all(mat_mod_mixed(pk0, sk0, q) == 0)), "strong_reduce left L_perp_q(pk0)"
 
     mu = rng.integers(0, q, size=params.n).astype(np.int64)
     u_pke = rng.integers(0, q, size=params.n).astype(np.int64)
+
+    # PATCH 05 audit finding (a real, confirmed bug — see the module
+    # docstring): an earlier version of this function "fixed" the
+    # legitimate doctor's own search failing (caused by PATCH 03's
+    # dimension-aware sigma inflating Trap's norm) by scaling
+    # ciphertext_noise_sigma DOWN in proportion to sigma. That was wrong in
+    # a way a negative control caught immediately: the noise became so
+    # small that the discrete Gaussian samples are essentially always
+    # exactly 0, so Verify degenerates into a NOISELESS exact-equality
+    # check that ANY algebraically-valid trapdoor passes — including one
+    # built from a totally unrelated, secret-free, public basis (the raw
+    # kernel basis of pk_i, computable by anyone). The success criterion
+    # was vacuous: it was measuring "is there SOME valid trapdoor for this
+    # keyword" (always true) rather than "does THIS SPECIFIC recovered key
+    # work" (the only question that says anything about forward security).
+    #
+    # Fixed by CALIBRATING the noise to the actual measured Trap norm this
+    # run produces, targeting a per-coordinate margin (TARGET_MARGIN_STD)
+    # empirically chosen (see PATCH 05 audit notes) to be small enough that
+    # the legitimate doctor passes reliably, yet — combined with a longer
+    # keyword test length (END_TO_END_L, up from the default l=10, which
+    # sharpens the all-l-coordinates-must-pass discrimination) — large
+    # enough relative to a garbage/wrong-key Trap's much larger norm that
+    # it reliably fails. This is verified BY TEST (test_negative_control_*
+    # in tests/test_end_to_end.py), not assumed from the calibration alone.
+    params.l = END_TO_END_L
+    calib_trap = trapdoor(pk0, sk0, "__e2e_calibration__", 0, mu, params, pyrng)
+    calib_norm = float(np.linalg.norm(calib_trap.astype(float)))
+    params.ciphertext_noise_sigma = TARGET_MARGIN_STD / calib_norm
+    if trace is not None:
+        trace.note(
+            "Calibrated ciphertext noise to the measured legitimate Trap norm",
+            detail="A fixed or proportionally-scaled noise width made Verify noiseless "
+                   "(and hence unable to distinguish a real recovered key from public "
+                   "garbage) once sigma grew with dimension — see the module docstring. "
+                   "Calibrating against THIS run's actual Trap norm keeps the legitimate "
+                   "doctor's margin comparable across n, and is checked (not assumed) by "
+                   "the negative-control tests.",
+            data={"calibration_trap_norm": calib_norm, "target_margin_std": TARGET_MARGIN_STD,
+                  "resulting_ciphertext_noise_sigma": params.ciphertext_noise_sigma, "l": params.l},
+            algo="EndToEnd",
+            highlight=True,
+        )
 
     history: list[PeriodDB] = []
     pk, sk = pk0, sk0
@@ -222,6 +470,12 @@ def build_frozen_history(
         N0_legit = verify_search(CT, legit_trap, params, trace)
         assert N0_legit is not None, f"legit doctor must find its own record at period {i}"
 
+        # PATCH 06 §6.5 -- honest baseline for the period/word/trap norm
+        # cross-check. Computed here (while `sk` is still in scope) because
+        # PeriodDB deliberately carries no secret key; only the resulting
+        # NUMBERS are kept, for reporting -- never the basis itself.
+        honest_chain_norms = _basis_chain_norms(pk, sk, target_kw, i, mu, params, pyrng)
+
         if h1_variant == "low_norm":
             R = H1(pk, i + 1, params)
             R_inv = np.array([[int(x) for x in row] for row in (H1_inverse(R) % q)], dtype=np.int64)
@@ -230,7 +484,7 @@ def build_frozen_history(
 
         history.append(PeriodDB(
             period=i, pk_ri=pk, records=records, CT=CT, CM=CM,
-            legit_trap_demo={"keyword": target_kw, "N0": N0_legit},
+            legit_trap_demo={"keyword": target_kw, "N0": N0_legit, **honest_chain_norms},
             R_into_next=R, ct_hash=_hash_ct(CT), cm_hash=_hash_cm(CM),
         ))
 
@@ -244,16 +498,15 @@ def build_frozen_history(
     return history, stolen_pk, stolen_sk, mu, u_pke
 
 
-def attack_period(
-    history: list[PeriodDB], i: int, J: int, stolen_sk_J: np.ndarray, params: Params,
-    mu: np.ndarray, u_pke: np.ndarray, reducer=None, trace: Trace | None = None,
-) -> dict:
-    """The backward attack against ONE frozen period. Attacker holds only:
-    `stolen_sk_J`, every public pk_r|k / R (both in `history`), and the
-    frozen `history[i]` ciphertexts — never the honest sk_r|i.
+def _recover_period_candidate(
+    history: list[PeriodDB], i: int, J: int, stolen_sk_J: np.ndarray, params: Params, reducer=None,
+) -> tuple[np.ndarray, bool, float, float, str]:
+    """The actual R^-1-transform recovery (PATCH 01-04's machinery): the
+    ONLY inputs are the stolen sk_J, and every public pk_r|k / R (read from
+    `history`, all public fields — see test_attacker_never_reads_honest_sk).
+    Returns (sk_star, membership_ok, trivial_norm, reduced_norm, method).
     """
     q, m = params.q, params.m
-
     # R_prod^-1 = R_{i+1}^-1 . R_{i+2}^-1 ... R_J^-1 (mod q) — all public.
     P_inv = np.eye(m, dtype=np.int64)
     for k in range(J - 1, i - 1, -1):
@@ -261,36 +514,104 @@ def attack_period(
         P_inv = (R_inv_k @ P_inv) % q
     P_inv_centered = centered_mod_q(P_inv, q)
 
-    cand_trivial, cand_reduced, reduced_ok, trivial_norm, reduced_norm, method = _recover_candidate(
+    _cand_trivial, cand_reduced, reduced_ok, trivial_norm, reduced_norm, method = _recover_candidate(
         P_inv_centered, stolen_sk_J, history[i].pk_ri, q, reducer=reducer,
     )
-    sk_star = cand_reduced
+    return cand_reduced, reduced_ok, trivial_norm, reduced_norm, method
+
+
+def _test_candidate(
+    history: list[PeriodDB], i: int, sk_star: np.ndarray, params: Params,
+    mu: np.ndarray, u_pke: np.ndarray, source_label: str,
+    membership_ok: bool = True, trivial_norm: float | None = None,
+    reduced_norm: float | None = None, reducer_method: str | None = None,
+    rng_tag: str = "attack", trace: Trace | None = None,
+) -> dict:
+    """Runs Level 1/2/3 for a GIVEN candidate basis `sk_star` against period
+    i's FROZEN database — the shared testing logic used both by the real
+    attack (attack_period) and by the negative controls
+    (attack_period_negative_control), so both go through IDENTICALLY the
+    same L2/L3 machinery. `source_label` records which one this was
+    ("recovered", "garbage", "wrong_period") for reporting.
+    """
     threshold = usability_threshold(params)["threshold"]
+    if reduced_norm is None:
+        reduced_norm = gram_schmidt_norm(sk_star)
 
     result = {
         "period": i,
-        "periods_back": J - i,
+        "source": source_label,
         "gs_norm": reduced_norm,
         "trivial_gs_norm": trivial_norm,
         "threshold": threshold,
-        "reducer_method": method,
-        "membership_ok": reduced_ok,
+        "reducer_method": reducer_method,
+        "membership_ok": membership_ok,
         "level1_norm_ok": bool(reduced_norm <= threshold),
     }
 
     kw = history[i].legit_trap_demo["keyword"]
     N0_legit = history[i].legit_trap_demo["N0"]
-    pyrng_local = random.Random(hash((i, J, "attack")) & 0xFFFFFFFF)
+    pyrng_local = random.Random(hash((i, source_label, rng_tag)) & 0xFFFFFFFF)
 
+    # GATE (audit-caught, see module docstring): NewBasisDel's own Klein-
+    # resampling step in this codebase does NOT enforce its correctness
+    # precondition (sigma >= gs_norm(T_A) * omega(sqrt(log m)), i.e.
+    # exactly Level 1's `threshold`) -- feed it an oversized or off-lattice
+    # basis and it still returns SOMETHING, because its re-randomization
+    # pool is dominated by fresh sigma-width Gaussian samples regardless of
+    # input quality. Verified directly: a totally public, unreduced kernel
+    # basis of pk_i (needing no secret, no theft) survives Trapdoor+Verify
+    # about as often as the real key, even at default params with no
+    # forward-security chain involved. Level 1 (norm) and lattice
+    # membership are NECESSARY conditions the algorithm's own math
+    # requires; a candidate that fails either is not a genuine trapdoor
+    # input, so Level 2 must not even be attempted for it -- attempting it
+    # anyway is exactly how the vacuous "any public garbage passes"
+    # criterion happened. This is the stricter match definition the audit
+    # asked for: passing Level 2 now requires ALSO clearing Level 1.
     N0_star = None
-    try:
-        trap_star = trapdoor(history[i].pk_ri, sk_star, kw, i, mu, params, pyrng_local, trace)
-        N0_star = verify_search(history[i].CT, trap_star, params, trace)
-    except Exception as e:  # noqa: BLE001 -- a recovered basis may simply be too degenerate to sample from
-        result["level2_error"] = str(e)
+    if not (result["level1_norm_ok"] and membership_ok):
+        result["level2_skipped_reason"] = (
+            "candidate fails Level 1 (norm) and/or lattice membership -- "
+            "NewBasisDel's own delegation precondition would be violated, "
+            "so a trapdoor built from it would not reflect genuine "
+            "delegation; not attempted."
+        )
+    else:
+        try:
+            trap_star = trapdoor(history[i].pk_ri, sk_star, kw, i, mu, params, pyrng_local, trace)
+            N0_star = verify_search(history[i].CT, trap_star, params, trace)
+        except Exception as e:  # noqa: BLE001 -- a recovered basis may simply be too degenerate to sample from
+            result["level2_error"] = str(e)
     result["N0_legit"] = N0_legit
     result["N0_star"] = N0_star
     result["level2_search_break"] = bool(N0_star is not None and N0_star == N0_legit)
+
+    # PATCH 06 §6.5 -- independent word-basis cross-check. SamplePre does
+    # NOT consume the period basis (gs_norm above); it consumes a WORD
+    # basis one MORE NewBasisDel delegation downstream, which GROWS the
+    # norm. This is a SEPARATE prediction of Level 2 success, computed
+    # from fresh Gaussian draws (not the same call used for N0_star above)
+    # -- when it agrees with the measured level2_search_break, the result
+    # is corroborated by two independent signals; when it disagrees, that
+    # is flagged rather than silently trusted.
+    honest = history[i].legit_trap_demo
+    result["honest_period_gs"] = honest["period_gs"]
+    result["honest_word_gs"] = honest["word_gs"]
+    result["honest_trap_norm"] = honest["trap_norm"]
+    result["honest_beta_norm"] = honest["beta_norm"]
+    try:
+        chain = _basis_chain_norms(history[i].pk_ri, sk_star, kw, i, mu, params, pyrng_local)
+        result["word_gs"] = chain["word_gs"]
+        result["trap_norm_predicted"] = chain["trap_norm"]
+        result["beta_norm"] = chain["beta_norm"]
+        result["word_pred_usable"] = bool(chain["word_gs"] <= threshold)
+        result["l2_matches_wordpred"] = (result["word_pred_usable"] == result["level2_search_break"])
+    except Exception as e:  # noqa: BLE001 -- off-lattice candidates have no well-defined word basis
+        result["word_gs"] = None
+        result["word_pred_usable"] = None
+        result["l2_matches_wordpred"] = None
+        result["word_gs_error"] = str(e)
 
     if LEVEL3_REACHABLE and result["level2_search_break"]:
         cm_entry = next(ct for (n_id, ct) in history[i].CM if n_id == N0_legit)
@@ -319,6 +640,67 @@ def attack_period(
         verdict = "survives (short enough, but search still failed)"
     result["verdict"] = verdict
     return result
+
+
+def attack_period(
+    history: list[PeriodDB], i: int, J: int, stolen_sk_J: np.ndarray, params: Params,
+    mu: np.ndarray, u_pke: np.ndarray, reducer=None, trace: Trace | None = None,
+) -> dict:
+    """The backward attack against ONE frozen period. Attacker holds only:
+    `stolen_sk_J`, every public pk_r|k / R (both in `history`), and the
+    frozen `history[i]` ciphertexts — never the honest sk_r|i. See
+    test_attacker_never_reads_honest_sk for the structural proof of this.
+    """
+    sk_star, membership_ok, trivial_norm, reduced_norm, method = _recover_period_candidate(
+        history, i, J, stolen_sk_J, params, reducer=reducer,
+    )
+    result = _test_candidate(
+        history, i, sk_star, params, mu, u_pke, source_label="recovered",
+        membership_ok=membership_ok, trivial_norm=trivial_norm, reduced_norm=reduced_norm,
+        reducer_method=method, rng_tag=str(J), trace=trace,
+    )
+    result["periods_back"] = J - i
+    return result
+
+
+def attack_period_negative_control(
+    history: list[PeriodDB], i: int, params: Params, mu: np.ndarray, u_pke: np.ndarray,
+    kind: str, wrong_period_sk: np.ndarray | None = None, trace: Trace | None = None,
+) -> dict:
+    """A NEGATIVE CONTROL: feeds a candidate that has NO legitimate
+    relationship to period i's real key through the EXACT SAME L2/L3
+    testing path (`_test_candidate`) as the real attack. If either of these
+    "succeeds" at the same rate as a genuine recovery, the success
+    criterion is vacuous and must be fixed BEFORE trusting any Level 2/3
+    result (see the module docstring's audit note).
+
+    - kind="garbage": the raw, unreduced kernel basis of pk_r|i itself —
+      computable by ANYONE from the PUBLIC key alone, no theft needed.
+    - kind="wrong_period": a genuine (well-formed, well-reduced) secret
+      basis, but for the WRONG period — proves the attack isn't secretly
+      succeeding just because "some valid-looking basis" was supplied.
+    """
+    if kind == "garbage":
+        sk_candidate = kernel_basis_mod_q(history[i].pk_ri, params.q)
+        # A kernel basis of pk_r|i IS (by construction) a genuine, if huge,
+        # basis of L_perp_q(pk_r|i) -- honestly membership_ok=True; it's
+        # Level 1 (norm) that must reject it, not membership.
+        membership_ok = True
+    elif kind == "wrong_period":
+        if wrong_period_sk is None:
+            raise ValueError("wrong_period_sk is required for kind='wrong_period'")
+        sk_candidate = wrong_period_sk
+        # wrong_period_sk is a real basis for a DIFFERENT period's lattice
+        # -- report membership against THIS period's pk_r|i honestly,
+        # rather than defaulting to True as if it were untested.
+        membership_ok = bool(np.all(mat_mod_mixed(history[i].pk_ri, sk_candidate, params.q) == 0))
+    else:
+        raise ValueError("kind must be 'garbage' or 'wrong_period'")
+
+    return _test_candidate(
+        history, i, sk_candidate, params, mu, u_pke, source_label=kind,
+        membership_ok=membership_ok, rng_tag="negctrl", trace=trace,
+    )
 
 
 def end_to_end_experiment(
@@ -373,12 +755,31 @@ def end_to_end_experiment(
             algo="EndToEnd",
         )
 
+    # Negative control, run every time (not just in the test suite) so a
+    # viewer never has to trust a Level 2/3 verdict on faith: if garbage
+    # (needing no secret at all) ever passes, the run is untrustworthy.
+    control_rows = [
+        attack_period_negative_control(history, i, p, mu, u_pke, kind="garbage", trace=None)
+        for i in range(J)
+    ]
+    control_passed = [r["period"] for r in control_rows if r["level2_search_break"]]
+    control_ok = not control_passed
+    trace.decision(
+        "Negative control: garbage (public kernel basis, no secret) vs Level 2",
+        verdict="control held (garbage failed, as required)" if control_ok
+                else f"CONTROL FAILED at period(s) {control_passed} -- verdict below is UNTRUSTWORTHY",
+        evidence={"control_passed_periods": control_passed},
+        algo="EndToEnd",
+        highlight=not control_ok,
+    )
+
     broken_l2 = [r["period"] for r in rows if r["level2_search_break"]]
     broken_l3 = [r["period"] for r in rows if r["level3_plaintext_break"]]
     any_l2, any_l3 = bool(broken_l2), bool(broken_l3)
+    wordpred_disagreements = [r["period"] for r in rows if r.get("l2_matches_wordpred") is False]
 
     if any_l2:
-        headline = f"End-to-end forward-security break at n={n}"
+        headline = f"End-to-end forward-security break at n={n}, J={J}"
         conclusion = (
             f"A single stolen SK_r|{J} lets the attacker reconstruct SK*_r|i for earlier "
             f"periods. At n={n}, this recovers the OLD SEARCH capability for period(s) "
@@ -395,11 +796,39 @@ def end_to_end_experiment(
                 "cryptographic parameters is open (needs large-n BKZ estimates)."
         )
     else:
-        headline = f"Resists this end-to-end attack at n={n}"
+        headline = f"Resists this end-to-end attack at n={n}, J={J}"
         conclusion = (
             "The recovered basis never yields a working old trapdoor at this n — the norm "
             "proxy overstated the threat; forward-security functionality resists this "
             "specific attack here."
+        )
+
+    if not control_ok:
+        headline = f"UNTRUSTWORTHY RUN at n={n}, J={J} -- negative control failed"
+        conclusion = (
+            f"The negative control (a public, secret-free garbage basis) passed Level 2 at "
+            f"period(s) {control_passed} in THIS run -- the Level 2 test is not discriminating "
+            f"a genuine recovered key from public garbage here, so the measured verdict above "
+            f"cannot be trusted. Do not report a break or a resist from this run; investigate "
+            f"the calibration (see the module docstring) before trusting any result at these "
+            f"parameters."
+        )
+
+    caveats = [
+        f"Demonstration parameters (n={n}). Even a search/decrypt-level break here does "
+        f"not establish a break at secure parameters — that needs a proof or a large-n "
+        f"BKZ cost estimate, neither of which this lab performs.",
+        "This tests ONE attack family (public R^-1 transform + lattice reduction). "
+        "'Resists this attack' is not the same claim as 'provably forward-secure'.",
+        "Level 2 (search) and Level 3 (decrypt) are different claims — a period can "
+        "break L2 (recover the old search capability) without breaking L3 (recover the "
+        "old plaintext), since Level 3 needs a stricter decode margin.",
+    ]
+    if wordpred_disagreements:
+        caveats.append(
+            f"The independent word-basis norm prediction (PATCH 06 §6.5) DISAGREED with the "
+            f"measured Level 2 outcome at period(s) {wordpred_disagreements} — inspect those "
+            f"rows' word_gs/threshold and word_gs_error before trusting them."
         )
 
     trace.result(headline, detail=conclusion, data={"broken_periods_l2": broken_l2, "broken_periods_l3": broken_l3},
@@ -412,16 +841,10 @@ def end_to_end_experiment(
         "broken_periods_l2": broken_l2, "broken_periods_l3": broken_l3,
         "headline": headline, "conclusion": conclusion,
         "level3_reachable_in_principle": LEVEL3_REACHABLE,
-        "caveats": [
-            f"Demonstration parameters (n={n}). Even a search/decrypt-level break here does "
-            f"not establish a break at secure parameters — that needs a proof or a large-n "
-            f"BKZ cost estimate, neither of which this lab performs.",
-            "This tests ONE attack family (public R^-1 transform + lattice reduction). "
-            "'Resists this attack' is not the same claim as 'provably forward-secure'.",
-            "Level 2 (search) and Level 3 (decrypt) are different claims — a period can "
-            "break L2 (recover the old search capability) without breaking L3 (recover the "
-            "old plaintext), since Level 3 needs a stricter decode margin.",
-        ],
+        "control_ok": control_ok, "control_passed_periods": control_passed,
+        "wordpred_disagreements": wordpred_disagreements,
+        "trustworthy": control_ok,
+        "caveats": caveats,
         "trace": trace.to_list(),
     }
 
@@ -444,29 +867,42 @@ def end_to_end_multi_n(
             per_n.append({"n": n, "error": str(e)})
 
     ok = [r for r in per_n if "error" not in r]
-    any_l2 = any(r["any_l2_break"] for r in ok)
-    broken_ns = sorted({r["n"] for r in ok if r["any_l2_break"]})
-    clean_ns = sorted({r["n"] for r in ok if not r["any_l2_break"]})
+    untrustworthy_ns = sorted({r["n"] for r in ok if not r.get("control_ok", True)})
+    trustworthy_ok = [r for r in ok if r.get("control_ok", True)]
+    any_l2 = any(r["any_l2_break"] for r in trustworthy_ok)
+    broken_ns = sorted({r["n"] for r in trustworthy_ok if r["any_l2_break"]})
+    clean_ns = sorted({r["n"] for r in trustworthy_ok if not r["any_l2_break"]})
 
-    if any_l2 and clean_ns:
+    if untrustworthy_ns:
         summary = (
-            f"Finding 2 — end-to-end forward-security demonstration (low-norm H1, fair BKZ "
-            f"tooling): the old search capability (Level 2) is recovered at n={broken_ns} but "
-            f"not at n={clean_ns}. This is a functionality-level forward-security break at "
-            f"demonstration parameters, confined to the smaller dimension(s) tested; whether "
-            f"it reaches cryptographic parameters is open (needs large-n BKZ estimates)."
+            f"UNTRUSTWORTHY at n={untrustworthy_ns}, J={J}: the negative control failed there "
+            f"(garbage passed Level 2), so those rows' verdicts cannot be trusted — see each "
+            f"row's own conclusion. " + (
+                f"Remaining trustworthy dimensions: broken at n={broken_ns}, resists at "
+                f"n={clean_ns}." if trustworthy_ok else "No trustworthy dimension in this run."
+            )
+        )
+    elif any_l2 and clean_ns:
+        summary = (
+            f"Finding 2 — end-to-end forward-security demonstration at J={J} (low-norm H1, "
+            f"fair BKZ tooling, negative control held at every tested n): the old search "
+            f"capability (Level 2) is recovered at n={broken_ns} but not at n={clean_ns}. This "
+            f"is a functionality-level forward-security break at demonstration parameters, "
+            f"confined to the smaller dimension(s) tested; whether it reaches cryptographic "
+            f"parameters is open (needs large-n BKZ estimates)."
         )
     elif any_l2:
         summary = (
             f"Finding 2 — end-to-end forward-security break confirmed at every tested "
-            f"dimension (n={broken_ns}). The recovered basis yields a working old trapdoor "
-            f"even under fair (BKZ vs BKZ) tooling."
+            f"dimension (n={broken_ns}, J={J}), negative control held throughout. The "
+            f"recovered basis yields a working old trapdoor even under fair (BKZ vs BKZ) "
+            f"tooling."
         )
     else:
         summary = (
-            "The recovered basis never yields a working old trapdoor at any tested n — the "
-            "norm proxy overstated the threat; forward-security functionality resists this "
-            "attack at the dimensions tested here."
+            f"At J={J}, the recovered basis never yields a working old trapdoor at any tested "
+            f"n (negative control held throughout) — the norm proxy overstated the threat; "
+            f"forward-security functionality resists this attack at the dimensions tested here."
         )
 
     return {
@@ -476,5 +912,6 @@ def end_to_end_multi_n(
         "any_l2_break": any_l2,
         "broken_ns": broken_ns,
         "clean_ns": clean_ns,
+        "untrustworthy_ns": untrustworthy_ns,
         "summary": summary,
     }

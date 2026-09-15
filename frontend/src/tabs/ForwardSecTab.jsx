@@ -20,7 +20,9 @@ function verdictRowClass(v) {
   return "";
 }
 
-export default function ForwardSecTab({ onTrace, initialized }) {
+export default function ForwardSecTab({ onTrace, initialized, params }) {
+  const currentN = params?.n ?? 4;
+
   const [J, setJ] = useState(5);
   const [variant, setVariant] = useState("low_norm");
   const [loading, setLoading] = useState(false);
@@ -42,6 +44,19 @@ export default function ForwardSecTab({ onTrace, initialized }) {
   const [e2eError, setE2eError] = useState(null);
   const [e2eResult, setE2eResult] = useState(null);
   const [e2eSelectedPeriod, setE2eSelectedPeriod] = useState(null);
+
+  // A single result at some J and a comparison table at a DIFFERENT J
+  // shown together was PATCH 06's on-screen contradiction. Both runs
+  // share this one J input; changing it (or n) invalidates whichever
+  // stale result(s) were computed at the old value so the two panels can
+  // never disagree about which experiment they're showing.
+  const setE2eJSafe = (val) => {
+    setE2eJ(val);
+    setE2eResult(null);
+    setE2eMultiResult(null);
+  };
+
+  const [e2eNList, setE2eNList] = useState(`${currentN},${currentN + 4}`);
 
   const [e2eMultiLoading, setE2eMultiLoading] = useState(false);
   const [e2eMultiError, setE2eMultiError] = useState(null);
@@ -92,7 +107,7 @@ export default function ForwardSecTab({ onTrace, initialized }) {
     setE2eError(null);
     setE2eSelectedPeriod(null);
     try {
-      const res = await api.attackForwardE2E({ J: e2eJ, n: 4, seed: Math.floor(Math.random() * 1e6), reducer_name: "bkz" });
+      const res = await api.attackForwardE2E({ J: e2eJ, n: currentN, seed: Math.floor(Math.random() * 1e6), reducer_name: "bkz" });
       setE2eResult(res.result);
       onTrace(res.trace);
     } catch (e) {
@@ -102,11 +117,20 @@ export default function ForwardSecTab({ onTrace, initialized }) {
     }
   };
 
+  const e2eNValues = e2eNList
+    .split(",")
+    .map((s) => parseInt(s.trim(), 10))
+    .filter((v) => Number.isFinite(v) && v > 0);
+
   const runE2EMulti = async () => {
+    if (e2eNValues.length === 0) {
+      setE2eMultiError("Enter at least one valid n (comma-separated).");
+      return;
+    }
     setE2eMultiLoading(true);
     setE2eMultiError(null);
     try {
-      const res = await api.attackForwardE2EMulti({ J: e2eJ, seed: Math.floor(Math.random() * 1e6), reducer_name: "bkz" });
+      const res = await api.attackForwardE2EMulti({ J: e2eJ, n_values: e2eNValues, seed: Math.floor(Math.random() * 1e6), reducer_name: "bkz" });
       setE2eMultiResult(res.result);
       onTrace(res.trace);
     } catch (e) {
@@ -184,20 +208,38 @@ export default function ForwardSecTab({ onTrace, initialized }) {
         <div className="flex items-end gap-4 flex-wrap">
           <label className="block">
             <div className="text-xs text-ink-400 mb-1">Periods (J)</div>
-            <input type="number" min={2} max={4} value={e2eJ} onChange={(e) => setE2eJ(Number(e.target.value))}
+            <input type="number" min={2} max={4} value={e2eJ} onChange={(e) => setE2eJSafe(Number(e.target.value))}
               className="mono text-sm bg-ink-900 border border-ink-700 rounded px-2 py-1.5 w-20" />
           </label>
+          <div className="text-xs text-ink-500">
+            n = <span className="mono text-ink-300">{currentN}</span> (left-rail parameter)
+          </div>
           <PrimaryButton onClick={runE2E} disabled={!initialized || e2eLoading}>
-            {e2eLoading ? "Running (builds + attacks every period)…" : "Run end-to-end attack (n=4)"}
+            {e2eLoading ? "Running (builds + attacks every period)…" : `Run end-to-end attack (n=${currentN}, J=${e2eJ})`}
           </PrimaryButton>
+          <label className="block">
+            <div className="text-xs text-ink-400 mb-1">Compare n values (comma-separated)</div>
+            <input type="text" value={e2eNList} onChange={(e) => { setE2eNList(e.target.value); setE2eMultiResult(null); }}
+              className="mono text-sm bg-ink-900 border border-ink-700 rounded px-2 py-1.5 w-28" />
+          </label>
           <SecondaryButton onClick={runE2EMulti} disabled={!initialized || e2eMultiLoading}>
-            {e2eMultiLoading ? "Comparing n=4 vs n=8 (can take a few minutes)…" : "Compare n=4 vs n=8"}
+            {e2eMultiLoading ? `Comparing n=${e2eNList} at J=${e2eJ} (can take a few minutes)…` : `Compare dimensions (n=${e2eNList}, J=${e2eJ})`}
           </SecondaryButton>
         </div>
         <ErrorBanner message={e2eError} />
 
         {e2eResult && (
           <div className="mt-4 space-y-4">
+            <div className="text-xs text-ink-500">
+              Run at <span className="mono text-ink-300">n={e2eResult.n}, J={e2eResult.J}</span>, reducer <span className="mono text-ink-300">{e2eResult.reducer_name}</span>
+            </div>
+
+            <div className={`text-xs rounded px-3 py-2 border ${e2eResult.control_ok ? "border-ink-700 text-ink-400" : "border-signal-red bg-signal-red/10 text-signal-red"}`}>
+              Negative control (garbage basis, no secret): {e2eResult.control_ok
+                ? "failed Level 2 as expected — this run's verdict is trustworthy."
+                : `UNEXPECTEDLY PASSED at period(s) ${JSON.stringify(e2eResult.control_passed_periods)} — this run is UNTRUSTWORTHY, do not trust the verdict below.`}
+            </div>
+
             <div className="text-xs text-ink-500 leading-relaxed border-l-2 border-ink-700 pl-3">
               {e2eResult.level3_reachable_in_principle
                 ? "Paper audit: Decrypt(CM0, j, SK_r||j) takes only the period secret key — Level 3 is reachable in principle if the recovered basis is short enough."
@@ -207,20 +249,26 @@ export default function ForwardSecTab({ onTrace, initialized }) {
             {/* timeline */}
             <div className="flex items-center overflow-x-auto pb-2">
               {e2eResult.rows.map((r, idx) => {
+                const both = r.level2_search_break && r.level3_plaintext_break;
                 const broke = r.level2_search_break;
                 const selected = e2eSelectedPeriod === r.period;
+                const toneClass = both
+                  ? "border-signal-blue/70 bg-signal-blue/10"
+                  : broke
+                  ? "border-signal-green/70 bg-signal-green/10"
+                  : "border-ink-700 bg-ink-900";
                 return (
                   <div key={r.period} className="flex items-center shrink-0">
                     <button
                       onClick={() => setE2eSelectedPeriod(r.period)}
                       className={`flex flex-col items-center justify-center w-24 h-16 rounded border-2 transition-colors ${
-                        selected ? "border-signal-blue" : broke ? "border-signal-green/70 bg-signal-green/10" : "border-ink-700 bg-ink-900"
+                        selected ? "border-signal-blue" : toneClass
                       }`}
                     >
                       <span className="text-xs text-ink-300">period {r.period}</span>
                       <span className="text-[10px] text-ink-500">frozen DB</span>
-                      <span className={`text-[10px] font-medium ${broke ? "text-signal-green" : "text-ink-500"}`}>
-                        {broke ? "L2 broken" : "survives"}
+                      <span className={`text-[10px] font-medium ${both ? "text-signal-blue" : broke ? "text-signal-green" : "text-ink-500"}`}>
+                        {both ? "L2+L3 broken" : broke ? "L2 broken" : "survives"}
                       </span>
                     </button>
                     {idx < e2eResult.rows.length - 1 && <div className="w-6 h-px bg-ink-700 mx-1" />}
@@ -246,7 +294,7 @@ export default function ForwardSecTab({ onTrace, initialized }) {
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
                     <div className="border border-ink-800 rounded p-2">
-                      <div className="text-ink-500 uppercase text-[10px] mb-1">L1 · norm proxy</div>
+                      <div className="text-ink-500 uppercase text-[10px] mb-1">L1 · period-basis norm</div>
                       <Badge tone={row.level1_norm_ok ? "green" : "amber"}>{row.level1_norm_ok ? "short enough" : "exceeds threshold"}</Badge>
                       <div className="mono text-ink-400 mt-1">{row.gs_norm.toFixed(2)} vs {row.threshold.toFixed(2)}</div>
                     </div>
@@ -266,13 +314,36 @@ export default function ForwardSecTab({ onTrace, initialized }) {
                       <div className="mono text-ink-300">{row.reducer_method}</div>
                     </div>
                   </div>
+                  <div className="border-t border-ink-800 pt-3">
+                    <div className="text-ink-500 uppercase text-[10px] mb-2">
+                      Word-basis cross-check (what SamplePre actually consumes, one delegation past the period basis)
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                      <div className="border border-ink-800 rounded p-2">
+                        <div className="text-ink-500 uppercase text-[10px] mb-1">honest word_gs</div>
+                        <div className="mono text-ink-300">{row.honest_word_gs?.toFixed(2)}</div>
+                        <div className="text-ink-600 text-[10px]">vs threshold {row.threshold.toFixed(2)}</div>
+                      </div>
+                      <div className="border border-ink-800 rounded p-2">
+                        <div className="text-ink-500 uppercase text-[10px] mb-1">attacker word_gs</div>
+                        <div className="mono text-ink-300">{row.word_gs != null ? row.word_gs.toFixed(2) : row.word_gs_error ? "error" : "—"}</div>
+                        <div className="text-ink-600 text-[10px]">predicted usable: {String(row.word_pred_usable)}</div>
+                      </div>
+                      <div className="border border-ink-800 rounded p-2 col-span-2">
+                        <div className="text-ink-500 uppercase text-[10px] mb-1">prediction vs measured L2</div>
+                        <Badge tone={row.l2_matches_wordpred === false ? "amber" : row.l2_matches_wordpred === true ? "green" : "neutral"}>
+                          {row.l2_matches_wordpred === false ? "DISAGREE — inspect" : row.l2_matches_wordpred === true ? "agree" : "n/a (off-lattice)"}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               );
             })()}
 
             <div className="flex items-start gap-3">
-              <Badge tone={e2eResult.any_l2_break ? "green" : "neutral"}>
-                {e2eResult.any_l2_break ? "BROKEN (functional)" : "SURVIVES (functional)"}
+              <Badge tone={!e2eResult.control_ok ? "red" : e2eResult.any_l2_break ? "green" : "neutral"}>
+                {!e2eResult.control_ok ? "UNTRUSTWORTHY" : e2eResult.any_l2_break ? "BROKEN (functional)" : "SURVIVES (functional)"}
               </Badge>
               <p className="text-sm text-ink-300">{e2eResult.conclusion}</p>
             </div>
@@ -287,12 +358,14 @@ export default function ForwardSecTab({ onTrace, initialized }) {
 
         {e2eMultiError && <ErrorBanner message={e2eMultiError} />}
         {e2eMultiResult && (
-          <Card title="n=4 vs n=8 (functional)" className="mt-4">
+          <Card title={`Dimension comparison — J=${e2eMultiResult.J}`} className="mt-4">
             <div className="overflow-x-auto">
               <table className="w-full text-sm mono">
                 <thead>
                   <tr className="text-left text-ink-500 text-xs uppercase">
                     <th className="pb-2 pr-4">n</th>
+                    <th className="pb-2 pr-4">J</th>
+                    <th className="pb-2 pr-4">control</th>
                     <th className="pb-2 pr-4">any L2 break?</th>
                     <th className="pb-2">broken periods (L2 / L3)</th>
                   </tr>
@@ -302,10 +375,16 @@ export default function ForwardSecTab({ onTrace, initialized }) {
                     <tr key={r.n} className="border-t border-ink-800">
                       <td className="py-1.5 pr-4">{r.n}</td>
                       {r.error ? (
-                        <td className="py-1.5 text-signal-red" colSpan={2}>error: {r.error}</td>
+                        <td className="py-1.5 text-signal-red" colSpan={4}>error: {r.error}</td>
                       ) : (
                         <>
-                          <td className={`py-1.5 pr-4 ${r.any_l2_break ? "text-signal-green" : "text-ink-500"}`}>{String(r.any_l2_break)}</td>
+                          <td className="py-1.5 pr-4">{r.J}</td>
+                          <td className={`py-1.5 pr-4 ${r.control_ok ? "text-ink-500" : "text-signal-red font-semibold"}`}>
+                            {r.control_ok ? "held" : "FAILED"}
+                          </td>
+                          <td className={`py-1.5 pr-4 ${!r.control_ok ? "text-signal-red" : r.any_l2_break ? "text-signal-green" : "text-ink-500"}`}>
+                            {!r.control_ok ? "untrustworthy" : String(r.any_l2_break)}
+                          </td>
                           <td className="py-1.5">{JSON.stringify(r.broken_periods_l2)} / {JSON.stringify(r.broken_periods_l3)}</td>
                         </>
                       )}
