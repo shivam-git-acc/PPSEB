@@ -601,7 +601,11 @@ def _test_candidate(
 
     kw = history[i].legit_trap_demo["keyword"]
     N0_legit = history[i].legit_trap_demo["N0"]
-    pyrng_local = random.Random(hash((i, source_label, rng_tag)) & 0xFFFFFFFF)
+    # Stable digest, not hash(): string hashing is randomized per process, so
+    # hash() here made the same seed produce a different attack in a new process.
+    pyrng_local = random.Random(
+        int.from_bytes(hashlib.sha256(f"{i}|{source_label}|{rng_tag}".encode()).digest()[:4], "big")
+    )
 
     # GATE (audit-caught, see module docstring): NewBasisDel's own Klein-
     # resampling step in this codebase does NOT enforce its correctness
@@ -756,11 +760,15 @@ def attack_period_negative_control(
 def end_to_end_experiment(
     J: int, base_params: Params, n: int | None = None, seed: int = 0,
     h1_variant: str = "low_norm", reducer_name: str = "bkz",
+    records_per_period: int = RECORDS_PER_PERIOD,
 ) -> dict:
     """Runs the full forward pass (frozen history) then the backward attack
     against every period 0..J-1, at a given n (defaults to base_params.n).
     `reducer_name` is "bkz" (linalg.strong_reduce, fair PATCH-04 tooling) or
-    "lll" (plain LLL, the weaker/original attacker).
+    "lll" (plain LLL, the weaker/original attacker). `records_per_period`
+    sets how many decoy records each frozen period DB holds — a larger
+    database is a strictly harder bar for a "found the right record" claim
+    (see the post-PATCH-06 audit note in the module docstring).
     """
     if reducer_name not in ("bkz", "lll"):
         raise ValueError("reducer_name must be 'bkz' or 'lll'")
@@ -778,7 +786,8 @@ def end_to_end_experiment(
     )
 
     history, stolen_pk, stolen_sk, mu, u_pke = build_frozen_history(
-        J, p, seed=seed, h1_variant=h1_variant, strengthen_legit=True, trace=trace,
+        J, p, seed=seed, h1_variant=h1_variant, strengthen_legit=True,
+        records_per_period=records_per_period, trace=trace,
     )
     trace.threat_model(
         f"Attacker steals SK_r|{J} and holds every public pk_r|i, R_i, and the frozen databases",

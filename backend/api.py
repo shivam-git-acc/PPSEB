@@ -7,7 +7,9 @@ so the frontend can render the step-by-step timeline alongside the outcome.
 
 from __future__ import annotations
 
+import json
 import random
+from contextlib import asynccontextmanager
 import time
 import traceback
 from typing import Optional
@@ -31,8 +33,26 @@ from attacks.forward_sec import (
 )
 from attacks.end_to_end import end_to_end_experiment, end_to_end_multi_n, DEFAULT_END_TO_END_N_VALUES
 from attacks.spec_defect import run_paper_version, run_corrected_version
+import sweep
 
-app = FastAPI(title="PPSEB Analysis Lab API")
+# MUST happen here, at import time, on the MAIN thread: fpylll's cysignals
+# dependency installs signal handlers on import and raises
+# "signal only works in main thread" if a worker thread imports it first.
+# The batch sweep (sweep.py) runs BKZ on a background thread, so without
+# this warm-up every BKZ cell of an overnight job would die. Importing here
+# leaves the module cached in sys.modules for the worker.
+FPYLLL_READY = sweep.warm_up_native_libs()
+
+@asynccontextmanager
+async def lifespan(_app):
+    """PATCH 08 §3: a job whose meta still says "running" belonged to a process
+    that died (crash, restart, --reload). Resume it; the per-job lock skips any
+    job another live process still owns, and resume skips units already on disk."""
+    sweep.resume_interrupted_jobs(default_params())
+    yield
+
+
+app = FastAPI(title="PPSEB Analysis Lab API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -411,6 +431,89 @@ def api_attack_spec(req: SpecRequest):
         "corrected": {"success": corrected["success"], "chain": corrected["chain"]},
     }
     return envelope(result, combined_trace, params)
+
+
+# --------------------------------------------------------------------------
+# PATCH 08 — batch sweep (overnight grid, checkpointed, aggregated)
+# --------------------------------------------------------------------------
+
+class SweepStartRequest(BaseModel):
+    n_values: list[int] = Field(default_factory=lambda: [4, 6, 8, 10])
+    J_values: list[int] = Field(default_factory=lambda: [3, 4, 5, 6, 8])
+    h1_variants: list[str] = Field(default_factory=lambda: ["low_norm"])
+    reducers: list[str] = Field(default_factory=lambda: ["bkz"])
+    records_per_period: int = Field(sweep.RECORDS_PER_PERIOD, ge=1, le=51)
+    repeats: int = Field(3, ge=1, le=20)
+    seed_base: int = 1000
+    max_hours: float = Field(12.0, gt=0, le=72)
+
+    def to_config(self) -> sweep.SweepConfig:
+        return sweep.SweepConfig(
+            n_values=self.n_values, J_values=self.J_values,
+            h1_variants=self.h1_variants, reducers=self.reducers,
+            records_per_period=self.records_per_period, repeats=self.repeats,
+            seed_base=self.seed_base, max_hours=self.max_hours,
+        )
+
+
+@app.post("/api/sweep/preflight")
+async def api_sweep_preflight(req: SweepStartRequest):
+    """What this grid costs and which cells are already doomed, BEFORE a
+    night is spent on it (see sweep.py's module docstring on the H2
+    dimension constraint)."""
+    return {"result": sweep.preflight(req.to_config(), SESSION.params.q)}
+
+
+@app.post("/api/sweep/start")
+async def api_sweep_start(req: SweepStartRequest):
+    config = req.to_config()
+    pre = sweep.preflight(config, SESSION.params.q)
+    job_id = sweep.start_job(config, SESSION.params)
+    return {"result": {"job_id": job_id, **pre}}
+
+
+@app.get("/api/sweep/status")
+async def api_sweep_status(job_id: str):
+    status = sweep.job_status(job_id)
+    if status is None:
+        raise HTTPException(404, f"no such sweep job: {job_id}")
+    return {"result": status}
+
+
+@app.get("/api/sweep/results")
+async def api_sweep_results(job_id: str, gate: str = "strict"):
+    if gate not in sweep.GATES:
+        raise HTTPException(400, f"gate must be one of {sweep.GATES}")
+    agg = sweep.aggregate(job_id, gate)
+    if agg is None:
+        raise HTTPException(404, f"no such sweep job: {job_id}")
+    return {"result": agg}
+
+
+@app.post("/api/sweep/stop")
+async def api_sweep_stop(job_id: str):
+    ok = sweep.stop_job(job_id)
+    if not ok:
+        raise HTTPException(404, f"no running sweep job: {job_id}")
+    return {"result": {"job_id": job_id, "stopping": True}}
+
+
+@app.get("/api/sweep/jobs")
+async def api_sweep_jobs():
+    return {"result": sweep.list_jobs()}
+
+
+@app.get("/api/sweep/export")
+async def api_sweep_export(job_id: str, fmt: str = "csv"):
+    from fastapi.responses import PlainTextResponse
+    if sweep.load_meta(job_id) is None:
+        raise HTTPException(404, f"no such sweep job: {job_id}")
+    if fmt == "csv":
+        return PlainTextResponse(sweep.records_csv(job_id), media_type="text/csv")
+    if fmt == "jsonl":
+        body = "\n".join(json.dumps(r) for r in sweep.load_records(job_id))
+        return PlainTextResponse(body, media_type="application/x-ndjson")
+    raise HTTPException(400, "fmt must be 'csv' or 'jsonl'")
 
 
 @app.exception_handler(Exception)

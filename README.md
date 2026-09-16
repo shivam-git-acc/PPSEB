@@ -93,3 +93,27 @@ implementation.
 Parameters are deliberately tiny (n=4, q=257 by default) so every matrix and
 every step fits on screen and every operation completes in a couple of
 seconds — this is an analysis instrument, not a production implementation.
+
+## Batch Sweep (overnight runs)
+
+The **Batch Sweep** tab runs the end-to-end forward-security attack over a grid
+(n × J × H1 variant × attacker reducer × repeats) as a server-side background
+job. Every completed run is appended to `backend/results/sweep_<job_id>.jsonl`
+(with `sweep_<job_id>.meta.json` for status), so you can close the browser. If
+the server dies mid-run it resumes the job on its next start and skips
+anything already on disk. `backend/results/` is git-ignored.
+
+Things to know before launching a long run:
+
+- **Only powers of 2 work for n at q=257.** H2's construction needs every prime
+  factor of n to divide q-1 = 256. The pre-flight panel lists the cells that
+  are guaranteed to error (PATCH 08's suggested n=6 and n=10 included) and
+  leaves them out of the ETA.
+- **Choose the trust gate when you read results; nothing is re-run.** *strict*
+  (PATCH 08 as written) also requires the word-basis cross-check to agree.
+  In testing, that predictor rated the honest doctor's own *working* basis
+  usable in 0 of 10 periods, so under *strict* a break can essentially never
+  count as trusted. The Results view reports that calibration and every break
+  excluded only by it. Compare the *controls only* view before reporting a
+  negative result.
+- Plots A–D export as SVG/PNG, and the raw data as CSV/JSONL.

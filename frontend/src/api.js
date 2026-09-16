@@ -33,4 +33,12 @@ export const api = {
   attackForwardE2E: (body) => post("/attack/forward-e2e", body),
   attackForwardE2EMulti: (body) => post("/attack/forward-e2e-multi", body),
   attackSpec: (body) => post("/attack/spec", body),
+
+  sweepPreflight: (body) => post("/sweep/preflight", body),
+  sweepStart: (body) => post("/sweep/start", body),
+  sweepStatus: (jobId) => get(`/sweep/status?job_id=${encodeURIComponent(jobId)}`),
+  sweepResults: (jobId, gate = "strict") => get(`/sweep/results?job_id=${encodeURIComponent(jobId)}&gate=${gate}`),
+  sweepStop: (jobId) => post(`/sweep/stop?job_id=${encodeURIComponent(jobId)}`, {}),
+  sweepJobs: () => get("/sweep/jobs"),
+  sweepExportUrl: (jobId, fmt) => `${BASE}/sweep/export?job_id=${encodeURIComponent(jobId)}&fmt=${fmt}`,
 };
