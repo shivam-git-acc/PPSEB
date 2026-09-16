@@ -43,7 +43,8 @@ n must be a power of two, so PATCH 08's suggested default grid
 (n in {4, 6, 8, 10}) has HALF its cells guaranteed to error — not a random
 risk, a certainty. `preflight()` reports exactly which cells are doomed and
 why BEFORE a night is spent on them, rather than discovering it at breakfast.
-The defaults still match the patch; the warning is what's new.
+The default grid is n in {4, 8} (as PATCH 09 directs); the warning still catches
+any invalid n typed in by hand.
 """
 
 from __future__ import annotations
@@ -105,7 +106,7 @@ def warm_up_native_libs() -> bool:
 @dataclass
 class SweepConfig:
     """PATCH 08 §2's grid. Defaults are the patch's own overnight defaults."""
-    n_values: list[int] = field(default_factory=lambda: [4, 6, 8, 10])
+    n_values: list[int] = field(default_factory=lambda: [4, 8])
     J_values: list[int] = field(default_factory=lambda: [3, 4, 5, 6, 8])
     h1_variants: list[str] = field(default_factory=lambda: ["low_norm"])
     reducers: list[str] = field(default_factory=lambda: ["bkz"])

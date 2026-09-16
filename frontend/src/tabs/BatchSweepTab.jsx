@@ -211,7 +211,7 @@ function RechartsExport({ containerRef, title, caption, filename }) {
 export default function BatchSweepTab({ initialized }) {
   const [view, setView] = useState("configure");
 
-  const [nList, setNList] = useState("4, 6, 8, 10");
+  const [nList, setNList] = useState("4, 8");
   const [jList, setJList] = useState("3, 4, 5, 6, 8");
   const [variants, setVariants] = useState(["low_norm"]);
   const [reducers, setReducers] = useState(["bkz"]);
@@ -360,9 +360,10 @@ export default function BatchSweepTab({ initialized }) {
           Every cell is one full end-to-end run (frozen DBs, real search and decrypt) and is
           repeated with different seeds so a single lucky or unlucky match never decides a cell.
           A repeat counts toward a verdict <b>only</b> if its negative controls failed (garbage and
-          wrong-period keys did not pass Level 2) <b>and</b> the independent word-basis cross-check
-          agreed with the measured outcome. Untrusted, errored and skipped cells are reported
-          openly and excluded from the conclusion — never counted as "survives".
+          wrong-period keys did not pass Level 2). In the <b>strict</b> view a break also needs the
+          attacker's word basis to be within 3× the honest doctor's; breaks that aren't are listed
+          with their ratio, not hidden. Untrusted, errored and skipped cells are reported openly and
+          excluded from the conclusion — never counted as "survives".
         </p>
         <div className="flex gap-2 mt-4">
           {["configure", "run", "results"].map((v) => (
@@ -388,7 +389,7 @@ export default function BatchSweepTab({ initialized }) {
         <Card title="Configure the grid">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <label className="block">
-              <div className="text-xs text-ink-400 mb-1">n values (comma-separated)</div>
+              <div className="text-xs text-ink-400 mb-1">n values (comma-separated; powers of 2 only at q=257)</div>
               <input value={nList} onChange={(e) => setNList(e.target.value)}
                 className="mono text-sm bg-ink-900 border border-ink-700 rounded px-2 py-1.5 w-full" />
             </label>

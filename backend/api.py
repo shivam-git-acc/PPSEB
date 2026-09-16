@@ -438,7 +438,7 @@ def api_attack_spec(req: SpecRequest):
 # --------------------------------------------------------------------------
 
 class SweepStartRequest(BaseModel):
-    n_values: list[int] = Field(default_factory=lambda: [4, 6, 8, 10])
+    n_values: list[int] = Field(default_factory=lambda: [4, 8])
     J_values: list[int] = Field(default_factory=lambda: [3, 4, 5, 6, 8])
     h1_variants: list[str] = Field(default_factory=lambda: ["low_norm"])
     reducers: list[str] = Field(default_factory=lambda: ["bkz"])
