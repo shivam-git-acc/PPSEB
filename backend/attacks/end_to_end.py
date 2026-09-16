@@ -64,9 +64,10 @@ understood to be the SAME vacuous-criterion bug PATCH 04 never hit
 (PATCH 04 never calls Trapdoor/NewBasisDel at all — its "broken" verdict
 is purely `reduced_norm <= threshold` on the RAW recovered candidate).
 Post-fix, this module's own n=4 runs land on a small, seed-dependent,
-genuine break confined to the period immediately before the theft (never
-2 periods back, in every seed sampled), and n=8 has shown none in the
-same sweep — consistent with PATCH 04's fair-BKZ norm-proxy picture
+genuine break, mostly at the period immediately before the theft (a later
+run also found a verified-genuine break 2 periods back, seed 24956 J=2
+period 0, so this is a tendency rather than a rule), and n=8 has shown
+none in the same sweep — consistent with PATCH 04's fair-BKZ norm-proxy picture
 ("mostly resists, at small dimensions") rather than contradicting it. The
 apparent "n=6 held, n=8 broke" tension was the vacuous-criterion bug
 wearing a dimension-shaped costume, not a real dimension effect.
@@ -211,14 +212,37 @@ not assumed away:
   Re-verified clean against the full test suite (legit reliability,
   negative controls, word-basis checks) at the new value.
 - **Conclusion on the specific flagged case:** the break was genuine, not
-  an artifact -- but it IS fragile: the word-basis prediction disagreed
-  because NewBasisDel's Klein-resampling has real run-to-run variance, so
-  the SAME recovered period-basis candidate can yield either a working or
-  a non-working word basis depending on the random draw. "Genuine but
-  variance-dependent" is the honest characterization; concluding
-  "survives" from the word-basis disagreement alone would have been
-  wrong here, since the actual measured outcome (checked directly, not
-  inferred from the independent proxy) was a real break.
+  an artifact. (An earlier version of this note attributed the word-basis
+  disagreement to NewBasisDel resampling variance. PATCH 09 testing refuted
+  that: independent redraws of the same attacker basis vary by only ~2%
+  in word_gs, and the honest basis redraws bit-identically. The disagreement
+  came from the absolute period-basis threshold being wrong for word bases.)
+
+## PATCH 09 — relative word check, and what it does and doesn't establish
+
+The word check is now relative (`word_basis_trust`): the attacker's word
+basis is "comparable" iff it is within WORD_FACTOR (3.0) of the honest
+doctor's word basis at the same period, which is known usable because the
+honest search works. A period is a TRUSTED break only if the search
+recovered N0, every negative control failed, and the basis is comparable;
+a measured break that isn't comparable is listed in `excluded_breaks` with
+its ratio and makes the run's headline "Unconfirmed break".
+
+Measured while applying it (n=4, BKZ attacker):
+- Sampling noise is small: two independent draws of the same attacker basis
+  differ by ~1-3% in word_gs, far inside a 3x factor. Each run now records
+  `word_decision_stability` (how often both draws agree on approve/exclude).
+  PATCH 09's suggested sanity light -- the honest doctor's approval rate --
+  can't fail: honest-vs-honest is ratio 1.0, and even an independent honest
+  redraw is bit-identical (the basis is too short for NewBasisDel to ever
+  select a random sample). So it is not used.
+- The relative check does NOT agree with real search. Every break in the
+  test grid had ratio 3.13-7.97 and was excluded, yet two of them checked
+  directly (ratios 7.97 and 6.83) matched the correct frozen record, gave
+  0/50 false accepts against decoy keywords, and matched fresh
+  re-encryptions of the target 5/5 and 3/5. A basis 8x the honest one still
+  searches correctly, so under the strict gate an exclusion is not evidence
+  the break is fake.
 """
 
 from __future__ import annotations
@@ -355,6 +379,30 @@ def _basis_chain_norms(
         "word_gs": gram_schmidt_norm(centered_mod_q(sk_word, q)),
         "trap_norm": float(np.linalg.norm(trap.astype(float))),
         "beta_norm": gram_schmidt_norm(centered_mod_q(beta, q)),
+    }
+
+
+WORD_FACTOR = 3.0
+
+
+def word_basis_trust(honest_word_gs: float, attacker_word_gs: float, factor: float = WORD_FACTOR) -> dict:
+    """PATCH 09: is the attacker's word basis comparable to one that provably works?
+
+    The old check compared word_gs against the PERIOD-basis usability
+    threshold. Word bases are legitimately larger (NewBasisDel grows the
+    norm), so it rated the honest doctor's own working word basis unusable
+    in 10/10 periods and stamped every break untrusted -- false negatives.
+    The honest doctor's word basis at the same period is usable by
+    construction (their search works), so it is the calibration reference:
+    the attacker's basis is credible iff it is within `factor` of it.
+    """
+    ratio = attacker_word_gs / honest_word_gs if honest_word_gs > 0 else float("inf")
+    return {
+        "approved": bool(attacker_word_gs <= factor * honest_word_gs),
+        "honest_word_gs": honest_word_gs,
+        "attacker_word_gs": attacker_word_gs,
+        "ratio": ratio,
+        "factor": factor,
     }
 
 
@@ -641,14 +689,12 @@ def _test_candidate(
     result["N0_star"] = N0_star
     result["level2_search_break"] = bool(N0_star is not None and N0_star == N0_legit)
 
-    # PATCH 06 §6.5 -- independent word-basis cross-check. SamplePre does
-    # NOT consume the period basis (gs_norm above); it consumes a WORD
-    # basis one MORE NewBasisDel delegation downstream, which GROWS the
-    # norm. This is a SEPARATE prediction of Level 2 success, computed
-    # from fresh Gaussian draws (not the same call used for N0_star above)
-    # -- when it agrees with the measured level2_search_break, the result
-    # is corroborated by two independent signals; when it disagrees, that
-    # is flagged rather than silently trusted.
+    # Word-basis cross-check (PATCH 06 §6.5, corrected by PATCH 09). SamplePre
+    # consumes a WORD basis one NewBasisDel delegation past the period basis,
+    # computed here from fresh Gaussian draws (not the call used for N0_star
+    # above). The prediction is RELATIVE to the honest doctor's word basis at
+    # this same period, which is known usable because the honest search works
+    # (see word_basis_trust for why the old absolute test was wrong).
     honest = history[i].legit_trap_demo
     result["honest_period_gs"] = honest["period_gs"]
     result["honest_word_gs"] = honest["word_gs"]
@@ -656,13 +702,32 @@ def _test_candidate(
     result["honest_beta_norm"] = honest["beta_norm"]
     try:
         chain = _basis_chain_norms(history[i].pk_ri, sk_star, kw, i, mu, params, pyrng_local)
+        trust = word_basis_trust(honest["word_gs"], chain["word_gs"])
         result["word_gs"] = chain["word_gs"]
         result["trap_norm_predicted"] = chain["trap_norm"]
         result["beta_norm"] = chain["beta_norm"]
-        result["word_pred_usable"] = bool(chain["word_gs"] <= threshold)
+        result["word_ratio"] = trust["ratio"]
+        result["word_factor"] = trust["factor"]
+        result["word_pred_usable"] = trust["approved"]
         result["l2_matches_wordpred"] = (result["word_pred_usable"] == result["level2_search_break"])
+        if source_label == "recovered":
+            # Sampling-noise check on the word check itself: a second, independent
+            # draw of the SAME attacker basis. (The honest basis can't be used --
+            # it is so short that NewBasisDel never selects a random sample, so its
+            # redraw is bit-identical and could never show noise.) If noise alone
+            # flips approve/exclude, the word check's decisions aren't stable.
+            # Separate RNG, so pyrng_local -- and the L3 decrypt below -- is unchanged.
+            redraw_rng = random.Random(int.from_bytes(
+                hashlib.sha256(f"{i}|{source_label}|{rng_tag}|word_redraw".encode()).digest()[:4], "big"))
+            redraw = _basis_chain_norms(history[i].pk_ri, sk_star, kw, i, mu, params, redraw_rng)
+            redraw_trust = word_basis_trust(honest["word_gs"], redraw["word_gs"])
+            result["word_gs_redraw"] = redraw["word_gs"]
+            result["word_redraw_spread"] = abs(redraw["word_gs"] - chain["word_gs"]) / chain["word_gs"]
+            result["word_decision_stable"] = redraw_trust["approved"] == trust["approved"]
     except Exception as e:  # noqa: BLE001 -- off-lattice candidates have no well-defined word basis
         result["word_gs"] = None
+        result["word_ratio"] = None
+        result["word_factor"] = WORD_FACTOR
         result["word_pred_usable"] = None
         result["l2_matches_wordpred"] = None
         result["word_gs_error"] = str(e)
@@ -851,7 +916,37 @@ def end_to_end_experiment(
     any_l2, any_l3 = bool(broken_l2), bool(broken_l3)
     wordpred_disagreements = [r["period"] for r in rows if r.get("l2_matches_wordpred") is False]
 
-    if any_l2:
+    # PATCH 09 §2: a period is a TRUSTED break only if the search recovered the
+    # doctor's N0, every negative control failed, and the attacker's word basis
+    # is comparable to the honest one. A measured break whose attacker basis is
+    # NOT comparable is "excluded" -- kept visible with its ratio, never
+    # silently dropped and never counted as a survival.
+    trusted_break_periods = [
+        r["period"] for r in rows
+        if r["level2_search_break"] and control_ok and r.get("word_pred_usable") is True
+    ]
+    excluded_breaks = [
+        {"period": r["period"], "word_ratio": r.get("word_ratio"), "word_gs": r.get("word_gs"),
+         "honest_word_gs": r.get("honest_word_gs"), "word_gs_error": r.get("word_gs_error")}
+        for r in rows
+        if r["level2_search_break"] and r.get("word_pred_usable") is not True
+    ]
+    stable = [r["word_decision_stable"] for r in rows if r.get("word_decision_stable") is not None]
+    word_decision_stability = (sum(1 for x in stable if x) / len(stable)) if stable else None
+    spreads = [r["word_redraw_spread"] for r in rows if r.get("word_redraw_spread") is not None]
+    word_redraw_max_spread = max(spreads) if spreads else None
+
+    if any_l2 and not trusted_break_periods:
+        headline = f"Unconfirmed break at n={n}, J={J} -- search recovered, word basis not comparable"
+        conclusion = (
+            f"The attacker's trapdoor returned the doctor's N0 at period(s) {broken_l2}, but at "
+            f"each of them the attacker's word basis was more than {WORD_FACTOR}x the honest "
+            f"doctor's at the same period (ratios "
+            f"{[round(e['word_ratio'], 2) if e['word_ratio'] is not None else None for e in excluded_breaks]}), "
+            f"so the break is not corroborated and is excluded from any verdict. It is not a "
+            f"survival either: a same-N0 recovery was measured."
+        )
+    elif any_l2:
         headline = f"End-to-end forward-security break at n={n}, J={J}"
         conclusion = (
             f"A single stolen SK_r|{J} lets the attacker reconstruct SK*_r|i for earlier "
@@ -900,9 +995,16 @@ def end_to_end_experiment(
     ]
     if wordpred_disagreements:
         caveats.append(
-            f"The independent word-basis norm prediction (PATCH 06 §6.5) DISAGREED with the "
-            f"measured Level 2 outcome at period(s) {wordpred_disagreements} — inspect those "
-            f"rows' word_gs/threshold and word_gs_error before trusting them."
+            f"The word-basis prediction (attacker within {WORD_FACTOR}x of the honest doctor's "
+            f"word basis) DISAGREED with the measured Level 2 outcome at period(s) "
+            f"{wordpred_disagreements} — inspect those rows' word_ratio and word_gs_error."
+        )
+    if word_decision_stability is not None and word_decision_stability < 0.9:
+        caveats.append(
+            f"Word-check stability warning: a second independent draw of the attacker's word "
+            f"basis flipped the approve/exclude decision in "
+            f"{1 - word_decision_stability:.0%} of periods, so the word check's exclusions are "
+            f"driven by sampling noise at these parameters and are not reliable."
         )
 
     trace.result(headline, detail=conclusion, data={"broken_periods_l2": broken_l2, "broken_periods_l3": broken_l3},
@@ -918,6 +1020,11 @@ def end_to_end_experiment(
         "control_ok": control_ok, "control_passed_periods": control_passed,
         "wrong_period_control_passed_periods": wrong_period_passed,
         "wordpred_disagreements": wordpred_disagreements,
+        "trusted_break_periods": trusted_break_periods,
+        "excluded_breaks": excluded_breaks,
+        "word_decision_stability": word_decision_stability,
+        "word_redraw_max_spread": word_redraw_max_spread,
+        "word_factor": WORD_FACTOR,
         "trustworthy": control_ok,
         "caveats": caveats,
         "trace": trace.to_list(),

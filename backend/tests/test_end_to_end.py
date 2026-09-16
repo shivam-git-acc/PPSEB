@@ -395,3 +395,62 @@ def test_negative_control_surfaced_per_run():
     assert "control_ok" in result and "trustworthy" in result
     assert result["control_ok"] is True  # the fixed gate; see test_negative_control_* above
     assert "UNTRUSTWORTHY" not in result["headline"]
+
+
+# --- PATCH 09: relative word check ----------------------------------------
+
+@pytest.fixture(scope="module")
+def excluded_break_run():
+    """seed 24956, n=4, J=2, 8 records/period: a real run whose two measured
+    breaks have attacker/honest word ratios ~7.97 and ~3.15 (both over 3.0)."""
+    return end_to_end_experiment(
+        J=2, base_params=default_params(), n=4, seed=24956, reducer_name="bkz", records_per_period=8,
+    )
+
+
+def test_word_check_relative_not_absolute():
+    """Regression for the PATCH 06 bug: the old check compared word_gs to the
+    PERIOD-basis threshold, so any large-but-honest word basis failed. The
+    relative check approves an honest-quality basis at any scale."""
+    for honest in (0.5, 42.4, 10_000.0):
+        assert e2e.word_basis_trust(honest, honest)["approved"]
+        assert e2e.word_basis_trust(honest, honest * e2e.WORD_FACTOR)["approved"]
+        assert not e2e.word_basis_trust(honest, honest * e2e.WORD_FACTOR * 1.01)["approved"]
+    assert e2e.word_basis_trust(10.0, 25.0)["ratio"] == pytest.approx(2.5)
+
+
+def test_wordpred_uses_relative(excluded_break_run):
+    for row in excluded_break_run["rows"]:
+        expected = row["word_gs"] <= e2e.WORD_FACTOR * row["honest_word_gs"]
+        assert row["word_pred_usable"] == expected
+        assert row["word_ratio"] == pytest.approx(row["word_gs"] / row["honest_word_gs"])
+        assert row["l2_matches_wordpred"] == (row["word_pred_usable"] == row["level2_search_break"])
+
+
+def test_trusted_break_requires_all_three_real_run(excluded_break_run):
+    r = excluded_break_run
+    rows = {row["period"]: row for row in r["rows"]}
+    for p in r["trusted_break_periods"]:
+        assert rows[p]["level2_search_break"] and rows[p]["word_pred_usable"] and r["control_ok"]
+    excluded_periods = {e["period"] for e in r["excluded_breaks"]}
+    assert excluded_periods == {p for p in r["broken_periods_l2"] if not rows[p]["word_pred_usable"]}
+    assert set(r["trusted_break_periods"]).isdisjoint(excluded_periods)
+
+
+def test_excluded_break_list_has_ratios_real_run(excluded_break_run):
+    r = excluded_break_run
+    assert r["excluded_breaks"], "seed 24956 is a known case with excluded breaks"
+    for e in r["excluded_breaks"]:
+        assert e["word_ratio"] > e2e.WORD_FACTOR
+    assert "unconfirmed" in r["headline"].lower()
+
+
+def test_word_decision_stability_high(excluded_break_run):
+    """Replaces PATCH 09's 'honest approval rate' test, which can't fail
+    (honest-vs-honest is ratio 1.0, and an honest redraw is bit-identical).
+    Independent redraws of the ATTACKER basis do vary; they must not flip the
+    approve/exclude decision, or noise would be deciding exclusions."""
+    r = excluded_break_run
+    assert r["word_decision_stability"] is not None
+    assert r["word_decision_stability"] >= 0.9
+    assert r["word_redraw_max_spread"] < 0.2

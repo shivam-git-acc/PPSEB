@@ -4,29 +4,23 @@ publication plots and a written conclusion.
 
 Design notes that matter for correctness (not just plumbing):
 
-**The trust gate.** PATCH 08 says "reuses PATCH-07 per-cell trust gates", but
-there is no PATCH-07 in this repo. Rather than invent a gate, the gate here is
-assembled from PATCH 08's OWN stated guardrails (§ header): a repeat is
-TRUSTED only if it completed, its negative controls all FAILED (garbage and
-wrong-period keys did not pass Level 2), and the independent word-basis
-cross-check AGREED with the measured Level 2 outcome at every period. Anything
-else is untrusted and is excluded from the conclusion — never silently counted
-as "survives". See `record_is_trusted`.
+**The trust gate.** A repeat is TRUSTED only if it completed and its negative
+controls all FAILED (garbage and wrong-period keys did not pass Level 2).
+Under gate="strict" (the headline, PATCH 09) it additionally must have no
+measured break excluded by the word check: a break counts only if the
+attacker's word basis is within WORD_FACTOR of the honest doctor's at that
+period. Untrusted repeats are excluded from the conclusion -- never silently
+counted as "survives". gate="controls_only" drops the word check. The gate is
+applied at AGGREGATION time from checkpointed fields, so both views can be
+read after a run without re-running anything. See `record_is_trusted`.
 
-**That strict gate is measurably biased, so it is not the only view.** The
-word-basis predictor reuses the PERIOD-basis usability threshold on the WORD
-basis (PATCH 06 §6.5 forbade inventing a new one), but the extra delegation
-inflates the norm past it: in a live run the honest doctor's own word basis
-was over threshold in 4 of 5 frozen periods, yet the honest search worked in
-every one (the history build asserts it). A predictor that rejects bases which
-demonstrably work can only "agree" with a non-break, so "must agree" filters
-out genuine breaks and biases an unattended sweep toward "no break found".
-Because every raw field is checkpointed, the gate is applied at AGGREGATION
-time: "strict" (the patch as written, still the default headline) and
-"controls_only" can both be read after the run without re-running anything.
-`gate_diagnostics` measures the miscalibration and lists every break excluded
-solely by the word-basis condition, and the conclusion refuses to call a run
-a "consistent negative result" when that list is non-empty.
+**What the word check has and hasn't been shown to do.** PATCH 09 replaced an
+absolute check that rejected the honest doctor's own working basis 10/10.
+The relative check is stable under sampling noise (`gate_diagnostics`
+reports it), but it does not match real search: in testing, breaks it
+excluded at ratios 6.8 and 8.0 passed a 50-decoy false-accept test. The
+conclusion therefore lists every excluded break with its ratio and never
+calls a run a clean negative result while that list is non-empty.
 
 **Seeds use a stable digest, never `hash()`.** Python randomizes string hashing
 per process, so `hash()`-derived seeds change on every restart -- which would
@@ -67,7 +61,7 @@ from pathlib import Path
 from typing import Iterator, Optional
 
 from ppseb.params import Params, default_params
-from attacks.end_to_end import end_to_end_experiment, RECORDS_PER_PERIOD
+from attacks.end_to_end import end_to_end_experiment, RECORDS_PER_PERIOD, WORD_FACTOR
 
 RESULTS_DIR = Path(__file__).resolve().parent / "results"
 
@@ -351,15 +345,16 @@ GATES = ("strict", "controls_only")
 
 
 def record_is_trusted(record: dict, gate: str = "strict") -> bool:
-    """PATCH 08's guardrails, applied per repeat. A repeat counts toward a
-    verdict ONLY if all of these hold; otherwise it is untrusted and is
-    excluded from the conclusion entirely (never counted as "survives").
+    """Whether one repeat may count toward a verdict. Untrusted repeats are
+    excluded from the conclusion entirely -- never counted as "survives".
 
-    gate="strict" is PATCH 08 as written: negative controls must fail AND the
-    word-basis cross-check must agree. gate="controls_only" drops the second
-    condition. Both are computed from the stored record at aggregation time,
-    so either can be read in the morning without re-running anything -- see
-    `gate_diagnostics` for why the choice matters.
+    gate="strict" (PATCH 09 §2, the headline): negative controls must fail AND
+    no measured break may be excluded by the word check. A break counts only
+    if the attacker's word basis is within WORD_FACTOR of the honest doctor's
+    at that period; a break that isn't makes the repeat untrusted, because a
+    same-N0 recovery was measured and calling it a survival would be false.
+    gate="controls_only" drops the word-check condition (secondary view).
+    Both read the stored record, so neither needs a re-run.
     """
     if gate not in GATES:
         raise ValueError(f"gate must be one of {GATES}")
@@ -367,55 +362,61 @@ def record_is_trusted(record: dict, gate: str = "strict") -> bool:
         return False
     if not record.get("control_ok", False):
         return False
-    if gate == "strict" and record.get("wordpred_disagreements"):
+    if gate == "strict" and record.get("excluded_breaks"):
         return False
     return True
 
 
-def gate_diagnostics(records: list[dict]) -> dict:
-    """Measure whether the strict gate's word-basis condition is biased.
+def break_periods(record: dict, gate: str = "strict") -> list[int]:
+    """Periods that count as breaks for this repeat under `gate`."""
+    if gate == "strict":
+        return list(record.get("trusted_break_periods") or [])
+    return list(record.get("broken_periods_l2") or [])
 
-    The word-basis predictor applies the PERIOD-basis usability threshold to
-    the WORD basis (PATCH 06 §6.5 said not to invent a new one). But the
-    honest doctor's own search provably works at every frozen period (the
-    history build asserts it), so a calibrated predictor should call the
-    honest word basis usable essentially always. `honest_word_usable_rate`
-    measures that directly. If it is low, "word-basis must agree" can only
-    ever agree with a NON-break, and every genuine break gets filtered out
-    as untrusted -- biasing an unattended sweep toward "no break found".
-    `breaks_excluded_by_wordpred_only` counts exactly the units that would
-    have been reported as breaks under the negative controls alone.
+
+def gate_diagnostics(records: list[dict]) -> dict:
+    """Two things a reader needs before believing the strict gate.
+
+    1. Stability: for every period the attacker's word basis is drawn twice,
+       independently; `word_decision_stability` is how often both draws land on
+       the same side of WORD_FACTOR. Anything well short of 100% means sampling
+       noise, not the basis, is deciding exclusions. (PATCH 09 proposed the
+       honest doctor's approval rate as the sanity light, but honest-vs-honest
+       is ratio 1.0 by definition, and even an independent honest redraw is
+       bit-identical in practice -- the basis is too short for NewBasisDel to
+       select any random sample -- so neither could ever fail.)
+    2. Every measured break the word check excluded, with its attacker/honest
+       ratio. Stability does NOT show the word check agrees with real search:
+       in testing, excluded breaks at ratios 6.8 and 8.0 passed a 50-decoy
+       false-accept test, i.e. they were genuine.
     """
-    honest_total = 0
-    honest_usable = 0
+    stable_total = 0
+    stable_ok = 0
     excluded = []
     for r in records:
         if r.get("status") != "ok":
             continue
         for p in r.get("periods", []):
-            hw, thr = p.get("honest_word_gs"), p.get("threshold")
-            if hw is None or thr is None:
+            stable = p.get("word_decision_stable")
+            if stable is None:
                 continue
-            honest_total += 1
-            if hw <= thr:
-                honest_usable += 1
-        if (
-            r.get("control_ok")
-            and r.get("wordpred_disagreements")
-            and r.get("broken_periods_l2")
-        ):
-            excluded.append({
-                "key": r.get("key"), "n": r.get("n"), "J": r.get("J"),
-                "variant": r.get("variant"), "reducer": r.get("reducer"),
-                "broken_periods_l2": r.get("broken_periods_l2"),
-            })
-    rate = (honest_usable / honest_total) if honest_total else None
+            stable_total += 1
+            stable_ok += bool(stable)
+        if r.get("control_ok"):
+            for e in r.get("excluded_breaks") or []:
+                excluded.append({
+                    "key": r.get("key"), "n": r.get("n"), "J": r.get("J"),
+                    "variant": r.get("variant"), "reducer": r.get("reducer"),
+                    "repeat": r.get("repeat"), **e,
+                })
+    rate = (stable_ok / stable_total) if stable_total else None
     return {
-        "honest_periods_measured": honest_total,
-        "honest_word_usable": honest_usable,
-        "honest_word_usable_rate": rate,
-        "breaks_excluded_by_wordpred_only": excluded,
-        "predictor_miscalibrated": rate is not None and rate < 0.9,
+        "word_factor": WORD_FACTOR,
+        "word_decision_periods": stable_total,
+        "word_decision_stable": stable_ok,
+        "word_decision_stability": rate,
+        "word_check_unstable": rate is not None and rate < 0.9,
+        "breaks_excluded_by_word_check": excluded,
     }
 
 
@@ -430,6 +431,10 @@ def _summarize_periods(result: dict) -> list[dict]:
             "gs_norm": row.get("gs_norm"),
             "word_gs": row.get("word_gs"),
             "honest_word_gs": row.get("honest_word_gs"),
+            "word_gs_redraw": row.get("word_gs_redraw"),
+            "word_decision_stable": row.get("word_decision_stable"),
+            "word_ratio": row.get("word_ratio"),
+            "word_pred_usable": row.get("word_pred_usable"),
             "threshold": row.get("threshold"),
             "level1_norm_ok": row.get("level1_norm_ok"),
             "level2_search_break": row.get("level2_search_break"),
@@ -464,6 +469,10 @@ def run_unit(n: int, J: int, variant: str, reducer: str, repeat: int, seed: int,
             "control_passed_periods": result.get("control_passed_periods", []),
             "wrong_period_control_passed_periods": result.get("wrong_period_control_passed_periods", []),
             "wordpred_disagreements": result.get("wordpred_disagreements", []),
+            "trusted_break_periods": result.get("trusted_break_periods", []),
+            "excluded_breaks": result.get("excluded_breaks", []),
+            "word_decision_stability": result.get("word_decision_stability"),
+            "word_factor": result.get("word_factor"),
             "any_l2_break": result.get("any_l2_break"),
             "any_l3_break": result.get("any_l3_break"),
             "broken_periods_l2": result.get("broken_periods_l2", []),
@@ -713,7 +722,7 @@ def aggregate_cells(records: list[dict], config: SweepConfig, gate: str = "stric
         reps = by_cell.get((n, J, variant, reducer), [])
         trusted = [r for r in reps if record_is_trusted(r, gate)]
         errored = [r for r in reps if r.get("status") == "error"]
-        broke = [r for r in trusted if r.get("broken_periods_l2")]
+        broke = [r for r in trusted if break_periods(r, gate)]
         break_rate = (len(broke) / len(trusted)) if trusted else None
 
         expected = config.repeats
@@ -731,7 +740,7 @@ def aggregate_cells(records: list[dict], config: SweepConfig, gate: str = "stric
 
         broken_periods: set[int] = set()
         for r in broke:
-            broken_periods.update(r.get("broken_periods_l2", []))
+            broken_periods.update(break_periods(r, gate))
 
         cells.append({
             "n": n, "J": J, "variant": variant, "reducer": reducer,
@@ -840,12 +849,11 @@ def build_conclusion(
     """PATCH 08 §7 -- a paragraph of MEASURED numbers, resting only on trusted
     cells, never claiming beyond the tested grid.
 
-    It also refuses to present an artifact of the gate as a finding: under the
-    strict gate, if genuine-looking breaks (negative controls held, same N0
-    recovered) were excluded ONLY because the word-basis predictor disagreed,
-    and that predictor is measurably miscalibrated on the honest doctor's own
-    working bases, "consistent negative result" would be a claim the data do
-    not support. The paragraph says so instead.
+    Under the strict gate it refuses to call a run a "consistent negative
+    result" while any measured break was excluded by the word check: those
+    exclusions are listed with their attacker/honest ratios so a reader can
+    judge them, and if the word check itself fails its honest-redraw sanity
+    light, the paragraph says the exclusions can't be relied on.
     """
     diagnostics = diagnostics if diagnostics is not None else gate_diagnostics(records)
     survives = [c for c in cells if c["outcome"] == "survives"]
@@ -853,11 +861,13 @@ def build_conclusion(
     untrusted = [c for c in cells if c["outcome"] == "untrusted"]
     errored = [c for c in cells if c["outcome"] in ("error", "skipped")]
     trusted_total = len(survives) + len(broke)
+    factor = diagnostics["word_factor"]
 
     gate_text = (
-        "negative controls must fail AND the word-basis cross-check must agree"
+        f"negative controls must fail AND the attacker's word basis must be within {factor}x "
+        f"the honest doctor's"
         if gate == "strict" else
-        "negative controls must fail (word-basis cross-check NOT required)"
+        "negative controls must fail (word check NOT required)"
     )
     head = (
         f"Batch sweep over n\u2208{sorted(set(config.n_values))}, J\u2208{sorted(set(config.J_values))}, "
@@ -865,20 +875,27 @@ def build_conclusion(
         f"records/period={config.records_per_period}; trust gate: {gate_text}. "
     )
 
-    excluded = diagnostics["breaks_excluded_by_wordpred_only"] if gate == "strict" else []
-    rate = diagnostics["honest_word_usable_rate"]
+    excluded = diagnostics["breaks_excluded_by_word_check"] if gate == "strict" else []
+    rate = diagnostics["word_decision_stability"]
     gate_caveat = ""
     if excluded:
-        cells_hit = sorted({(e["n"], e["J"]) for e in excluded})
-        gate_caveat = (
-            f"CAUTION: {len(excluded)} repeat(s) recovered the doctor's N0 with every negative "
-            f"control holding, but were excluded ONLY because the word-basis predictor "
-            f"disagreed (cells n,J = {cells_hit}). That predictor rated the honest doctor's own "
-            f"word basis usable in only "
-            + (f"{rate:.0%}" if rate is not None else "an unmeasured fraction")
-            + " of frozen periods, although the honest search provably works at every one -- "
-            f"so it rejects bases that demonstrably work, and this gate is biased toward "
-            f"'no break'. Compare the controls-only view before reporting a negative result. "
+        listing = "; ".join(
+            f"n={e['n']},J={e['J']} repeat {e['repeat']} period {e['period']} ratio "
+            + (f"{e['word_ratio']:.2f}" if e.get("word_ratio") is not None else "n/a")
+            for e in excluded
+        )
+        gate_caveat += (
+            f"Excluded by the word check: {len(excluded)} measured break(s) with every negative "
+            f"control holding but the attacker's word basis more than {factor}x the honest "
+            f"doctor's ({listing}). These are neither trusted breaks nor survivals, and an "
+            f"exclusion does not show a break is fake: the word check is a norm proxy, and in "
+            f"testing, breaks it excluded passed a 50-decoy false-accept test. "
+        )
+    if diagnostics["word_check_unstable"]:
+        gate_caveat += (
+            f"CAUTION: two independent draws of the attacker's word basis landed on opposite "
+            f"sides of {factor}x in {1 - rate:.0%} of periods, so sampling noise is deciding "
+            f"exclusions and they are not reliable. Compare the controls-only view. "
         )
 
     if trusted_total == 0:
@@ -907,8 +924,8 @@ def build_conclusion(
             body += f"Breaks appear at every trusted dimension tested (n\u2208{broken_ns}). "
     elif excluded:
         body += (
-            ". No break survived this gate, but that is NOT a clean negative result -- see the "
-            "caution below. "
+            ". No trusted break, but this is NOT a clean negative result: measured breaks were "
+            "excluded by the word check (listed below). "
         )
     else:
         body += (

@@ -329,14 +329,16 @@ export default function ForwardSecTab({ onTrace, initialized, params }) {
                         <div className="text-ink-600 text-[10px]">vs threshold {row.threshold.toFixed(2)}</div>
                       </div>
                       <div className="border border-ink-800 rounded p-2">
-                        <div className="text-ink-500 uppercase text-[10px] mb-1">honest word_gs</div>
+                        <div className="text-ink-500 uppercase text-[10px] mb-1">honest word_gs (reference)</div>
                         <div className="mono text-ink-300">{row.honest_word_gs?.toFixed(2)}</div>
-                        <div className="text-ink-600 text-[10px]">vs threshold {row.threshold.toFixed(2)}</div>
+                        <div className="text-ink-600 text-[10px]">known usable: the honest search works</div>
                       </div>
                       <div className="border border-ink-800 rounded p-2">
                         <div className="text-ink-500 uppercase text-[10px] mb-1">attacker word_gs</div>
                         <div className="mono text-ink-300">{row.word_gs != null ? row.word_gs.toFixed(2) : "—"}</div>
-                        <div className="text-ink-600 text-[10px]">predicted usable: {String(row.word_pred_usable)}</div>
+                        <div className="text-ink-600 text-[10px]">
+                          ratio {row.word_ratio != null ? row.word_ratio.toFixed(2) : "—"} vs factor {row.word_factor} → {row.word_pred_usable ? "comparable" : "not comparable"}
+                        </div>
                       </div>
                       <div className="border border-ink-800 rounded p-2">
                         <div className="text-ink-500 uppercase text-[10px] mb-1">word_gs_error</div>
@@ -349,9 +351,9 @@ export default function ForwardSecTab({ onTrace, initialized, params }) {
                       </Badge>
                       <span className="text-ink-400 ml-2">
                         {row.l2_matches_wordpred === false && row.word_pred_usable === false && row.level2_search_break
-                          ? "Direction: word-basis predicts UNUSABLE (over threshold), but Level 2 measured a BREAK. This reflects NewBasisDel's own re-sampling variance (this cross-check uses a fresh, independent Gaussian draw, not the same one the real attack used) — it is not automatic proof the break is fake; verify with a per-period false-accept check before trusting either way."
+                          ? `Direction: Level 2 measured a BREAK, but the attacker's word basis is ${row.word_ratio != null ? row.word_ratio.toFixed(2) : "?"}x the honest doctor's (over the ${row.word_factor}x factor), so the break is not corroborated and is excluded from any verdict. Not a survival either — a same-N0 recovery was measured.`
                           : row.l2_matches_wordpred === false && row.word_pred_usable && !row.level2_search_break
-                          ? "Direction: word-basis predicts USABLE (under threshold), but Level 2 measured NO break. Possible SamplePre/search issue — worth investigating."
+                          ? "Direction: the attacker's word basis is comparable to the honest doctor's, but Level 2 measured NO break. The basis looks usable yet the search failed — a legitimate survival, recorded for inspection."
                           : row.l2_matches_wordpred === true
                           ? "The independent word-basis prediction and the measured Level 2 outcome agree."
                           : ""}

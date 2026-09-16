@@ -109,11 +109,13 @@ Things to know before launching a long run:
   factor of n to divide q-1 = 256. The pre-flight panel lists the cells that
   are guaranteed to error (PATCH 08's suggested n=6 and n=10 included) and
   leaves them out of the ETA.
-- **Choose the trust gate when you read results; nothing is re-run.** *strict*
-  (PATCH 08 as written) also requires the word-basis cross-check to agree.
-  In testing, that predictor rated the honest doctor's own *working* basis
-  usable in 0 of 10 periods, so under *strict* a break can essentially never
-  count as trusted. The Results view reports that calibration and every break
-  excluded only by it. Compare the *controls only* view before reporting a
-  negative result.
+- **Trust gate, chosen when you read results (nothing is re-run).** *strict*
+  (the headline) counts a break only if the negative controls failed and the
+  attacker's word basis is within 3× the honest doctor's at that period.
+  *controls only* drops that word check. The word check is stable under
+  sampling noise (the Results view shows this), but it is a norm proxy, not a
+  test of search: in testing, breaks it excluded at ratios 6.8 and 8.0 still
+  passed a 50-decoy false-accept test. The Results view lists every excluded
+  break with its ratio, and the conclusion won't call a run a negative result
+  while any exist.
 - Plots A–D export as SVG/PNG, and the raw data as CSV/JSONL.

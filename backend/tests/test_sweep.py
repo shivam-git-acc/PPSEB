@@ -37,15 +37,18 @@ def _ok_record(cfg, n, J, repeat, broke_periods=(), trusted=True, variant="low_n
         "n": n, "J": J, "variant": variant, "reducer": reducer,
         "repeat": repeat, "seed": seed, "status": "ok",
         "control_ok": trusted,
-        "wordpred_disagreements": [] if trusted else [0],
+        "wordpred_disagreements": [],
         "any_l2_break": bool(broke_periods),
         "broken_periods_l2": list(broke_periods),
+        "trusted_break_periods": list(broke_periods),
+        "excluded_breaks": [],
         "broken_periods_l3": [],
         "periods": [
             {"period": p, "periods_back": J - p, "gs_norm": 10.0 + p, "word_gs": 100.0 + p,
              "honest_word_gs": 50.0 + p, "threshold": 27.0,
              "level1_norm_ok": True, "level2_search_break": p in broke_periods,
              "level3_plaintext_break": False, "l2_matches_wordpred": True,
+             "word_ratio": 2.0, "word_pred_usable": True, "word_decision_stable": True,
              "control_garbage_passed": False, "control_wrong_period_passed": False}
             for p in range(J)
         ],
@@ -121,6 +124,7 @@ def test_error_cell_continues(monkeypatch):
             raise RuntimeError("injected failure")
         return {
             "rows": [], "control_ok": True, "wordpred_disagreements": [],
+            "trusted_break_periods": [], "excluded_breaks": [],
             "any_l2_break": False, "broken_periods_l2": [], "broken_periods_l3": [],
         }
 
@@ -231,8 +235,9 @@ def test_record_is_trusted_gate():
     bad_control = dict(ok, control_ok=False)
     assert not sweep.record_is_trusted(bad_control)
 
-    bad_wordpred = dict(ok, wordpred_disagreements=[2])
-    assert not sweep.record_is_trusted(bad_wordpred)
+    word_excluded = dict(ok, excluded_breaks=[{"period": 2, "word_ratio": 7.9}])
+    assert not sweep.record_is_trusted(word_excluded)
+    assert sweep.record_is_trusted(word_excluded, "controls_only")
 
     errored = dict(ok, status="error")
     assert not sweep.record_is_trusted(errored)
@@ -314,72 +319,93 @@ def test_h2_dimension_valid_matches_the_real_constraint():
 
 # --- gate bias, reproducibility, multi-process safety --------------------
 
-def _wordpred_only_break(cfg, n, J, repeat):
-    """A repeat that recovered N0 with every negative control holding, excluded
-    ONLY because the word-basis predictor disagreed -- the exact case the live
-    run exposed."""
+def _word_excluded_break(cfg, n, J, repeat, ratio=7.97):
+    """A repeat that recovered N0 with every negative control holding, but whose
+    attacker word basis is `ratio`x the honest one -- excluded by the word check."""
     rec = _ok_record(cfg, n, J, repeat, broke_periods=(J - 1,))
-    rec["control_ok"] = True
-    rec["wordpred_disagreements"] = [J - 1]
-    # Honest word basis over threshold although the honest search works.
-    for p in rec["periods"]:
-        p["honest_word_gs"] = 60.0
-        p["threshold"] = 27.0
+    rec["trusted_break_periods"] = []
+    rec["excluded_breaks"] = [{"period": J - 1, "word_ratio": ratio, "word_gs": 338.1,
+                               "honest_word_gs": 42.4, "word_gs_error": None}]
+    rec["periods"][J - 1]["word_ratio"] = ratio
+    rec["periods"][J - 1]["word_pred_usable"] = False
     return _finalize(rec)
 
 
-def test_controls_only_gate_counts_wordpred_disagreement():
+def test_trusted_break_requires_all_three():
+    """PATCH 09 §5: a break counts only with same N0 AND controls failed AND the
+    attacker's word basis within the factor."""
     cfg = _cfg()
-    rec = _wordpred_only_break(cfg, 4, 3, 0)
-    assert not sweep.record_is_trusted(rec, "strict")
+    within = _finalize(_ok_record(cfg, 4, 3, 0, broke_periods=(2,)))
+    assert sweep.record_is_trusted(within, "strict")
+    assert sweep.break_periods(within, "strict") == [2]
+
+    over_factor = _word_excluded_break(cfg, 4, 3, 1)
+    assert not sweep.record_is_trusted(over_factor, "strict")
+    assert sweep.break_periods(over_factor, "strict") == []
+
+    control_passed = _ok_record(cfg, 4, 3, 2, broke_periods=(2,), trusted=False)
+    assert not sweep.record_is_trusted(control_passed, "strict")
+    assert not sweep.record_is_trusted(control_passed, "controls_only")
+
+
+def test_controls_only_counts_word_excluded_break():
+    cfg = _cfg()
+    rec = _word_excluded_break(cfg, 4, 3, 0)
     assert sweep.record_is_trusted(rec, "controls_only")
+    assert sweep.break_periods(rec, "controls_only") == [2]
     with pytest.raises(ValueError):
         sweep.record_is_trusted(rec, "anything_else")
 
 
-def test_controls_only_gate_still_rejects_failed_controls():
+def test_excluded_break_list_has_ratios():
     cfg = _cfg()
-    rec = _ok_record(cfg, 4, 3, 0, broke_periods=(2,), trusted=False)
-    assert not sweep.record_is_trusted(rec, "controls_only")
-
-
-def test_gate_diagnostics_measure_miscalibration():
-    cfg = _cfg()
-    records = [_wordpred_only_break(cfg, 4, 3, r) for r in range(3)]
+    records = [_word_excluded_break(cfg, 4, 3, r, ratio=3.0 + r) for r in range(3)]
     d = sweep.gate_diagnostics(records)
-    assert d["honest_periods_measured"] == 9
-    assert d["honest_word_usable"] == 0
-    assert d["honest_word_usable_rate"] == 0.0
-    assert d["predictor_miscalibrated"] is True
-    assert len(d["breaks_excluded_by_wordpred_only"]) == 3
+    excluded = d["breaks_excluded_by_word_check"]
+    assert len(excluded) == 3
+    assert sorted(e["word_ratio"] for e in excluded) == [3.0, 4.0, 5.0]
+    assert all({"n", "J", "repeat", "period", "word_ratio"} <= set(e) for e in excluded)
 
 
-def test_strict_conclusion_never_claims_clean_negative_when_breaks_were_filtered():
-    """The failure mode the live run exposed: under the strict gate, a run
-    whose only breaks were removed by the miscalibrated word-basis check must
-    NOT be reported as a consistent negative result."""
+def test_word_decision_stability_reported_and_can_fail():
+    """The sanity light must be able to fail -- unlike an honest-vs-honest rate."""
+    cfg = _cfg(repeats=2)
+    records = [_finalize(_ok_record(cfg, 4, 3, r)) for r in range(2)]
+    assert sweep.gate_diagnostics(records)["word_check_unstable"] is False
+
+    for rec in records:
+        for p in rec["periods"]:
+            p["word_decision_stable"] = False
+    d = sweep.gate_diagnostics(records)
+    assert d["word_decision_stability"] == 0.0
+    assert d["word_check_unstable"] is True
+    text = sweep.build_conclusion(sweep.aggregate_cells(records, cfg), cfg, records)
+    assert "CAUTION" in text
+
+
+def test_strict_conclusion_never_claims_clean_negative_when_breaks_were_excluded():
     cfg = _cfg(n_values=[4], J_values=[3, 4], repeats=3)
-    records = [_finalize(_ok_record(cfg, 4, 3, r)) for r in range(3)]         # clean survives
-    records += [_wordpred_only_break(cfg, 4, 4, r) for r in range(3)]        # filtered breaks
+    records = [_finalize(_ok_record(cfg, 4, 3, r)) for r in range(3)]          # clean survives
+    records += [_word_excluded_break(cfg, 4, 4, r) for r in range(3)]         # excluded breaks
 
     cells = sweep.aggregate_cells(records, cfg, "strict")
     text = sweep.build_conclusion(cells, cfg, records, "strict")
     assert "consistent negative result" not in text
-    assert "CAUTION" in text
+    assert "Excluded by the word check: 3" in text
+    assert "7.97" in text
 
-    cells_c = sweep.aggregate_cells(records, cfg, "controls_only")
-    by_j = {c["J"]: c for c in cells_c}
+    by_j = {c["J"]: c for c in sweep.aggregate_cells(records, cfg, "controls_only")}
     assert by_j[4]["outcome"] == "break"
     assert by_j[4]["break_rate"] == pytest.approx(1.0)
 
 
-def test_clean_negative_result_still_reported_when_nothing_was_filtered():
+def test_clean_negative_result_still_reported_when_nothing_was_excluded():
     cfg = _cfg(repeats=3)
     records = [_finalize(_ok_record(cfg, 4, 3, r)) for r in range(3)]
     cells = sweep.aggregate_cells(records, cfg, "strict")
     text = sweep.build_conclusion(cells, cfg, records, "strict")
     assert "consistent negative result" in text
-    assert "CAUTION" not in text
+    assert "Excluded by the word check" not in text
 
 
 def test_seeds_stable_across_processes():

@@ -574,7 +574,7 @@ export default function BatchSweepTab({ initialized }) {
               <Card title="Trust gate">
                 <div className="flex gap-2 flex-wrap">
                   {[
-                    ["strict", "strict (PATCH 08 as written)"],
+                    ["strict", "strict (headline)"],
                     ["controls_only", "negative controls only"],
                   ].map(([g, label]) => (
                     <button key={g}
@@ -587,30 +587,54 @@ export default function BatchSweepTab({ initialized }) {
                   ))}
                 </div>
                 <p className="text-xs text-ink-400 mt-3 leading-relaxed">
-                  Both views come from the same saved runs — nothing is re-run. <b>strict</b> also requires the
-                  word-basis cross-check to agree with the measured outcome; <b>controls only</b> requires just the
-                  negative controls (garbage and wrong-period keys) to fail.
+                  Both views come from the same saved runs — nothing is re-run. <b>strict</b> counts a break only if the
+                  negative controls failed <i>and</i> the attacker's word basis is within the stated factor of the honest
+                  doctor's at that period; <b>controls only</b> drops the word check.
                 </p>
                 {results.gate_diagnostics && (() => {
                   const d = results.gate_diagnostics;
-                  const excluded = d.breaks_excluded_by_wordpred_only || [];
+                  const excluded = d.breaks_excluded_by_word_check || [];
+                  const rate = d.word_decision_stability;
                   return (
-                    <div className={`mt-3 text-xs rounded px-3 py-2.5 border leading-relaxed ${
-                      d.predictor_miscalibrated && excluded.length
-                        ? "border-amber-600/40 bg-amber-500/10 text-amber-300"
-                        : "border-ink-700 text-ink-400"
-                    }`}>
-                      Word-basis predictor calibration: it rated the honest doctor's own (working) word basis usable in{" "}
-                      <span className="mono">{d.honest_word_usable}/{d.honest_periods_measured}</span> frozen periods
-                      {d.honest_word_usable_rate != null && <> (<span className="mono">{(d.honest_word_usable_rate * 100).toFixed(0)}%</span>)</>}.
-                      A calibrated predictor would be near 100%, since the honest search works at every period.{" "}
-                      <b>{excluded.length}</b> repeat(s) recovered the doctor's N0 with every negative control holding and were
-                      excluded by the strict gate <i>only</i> because the word-basis check disagreed
-                      {excluded.length > 0 && (
-                        <> (n,J: <span className="mono">{[...new Set(excluded.map((e) => `${e.n},${e.J}`))].join("; ")}</span>)</>
-                      )}.
-                      {d.predictor_miscalibrated && excluded.length > 0 &&
-                        " The strict gate is therefore biased toward 'no break' — compare the controls-only view before reporting a negative result."}
+                    <div className="mt-3 space-y-2">
+                      <div className={`text-xs rounded px-3 py-2.5 border leading-relaxed ${
+                        d.word_check_unstable ? "border-signal-red/50 bg-signal-red/10 text-signal-red" : "border-ink-700 text-ink-400"
+                      }`}>
+                        <b>Word-check stability:</b> two independent draws of the attacker's word basis made the same approve/exclude
+                        decision in <span className="mono">{d.word_decision_stable}/{d.word_decision_periods}</span> periods
+                        {rate != null && <> (<span className="mono">{(rate * 100).toFixed(0)}%</span>)</>}.{" "}
+                        {d.word_check_unstable
+                          ? "Well below 100%: sampling noise, not the basis, is deciding exclusions — they are not reliable."
+                          : "This only rules out sampling noise. It does not show the word check agrees with real search: in testing, breaks it excluded passed a 50-decoy false-accept test."}
+                      </div>
+                      <div className="text-xs rounded px-3 py-2.5 border border-ink-700 text-ink-400 leading-relaxed">
+                        <b>{excluded.length}</b> measured break(s) had every negative control holding but were excluded by the word check
+                        (attacker word basis more than {d.word_factor}× the honest doctor's). They are neither trusted breaks nor survivals.
+                        {excluded.length > 0 && (
+                          <div className="overflow-x-auto mt-2">
+                            <table className="text-[11px] mono">
+                              <thead>
+                                <tr className="text-ink-500 text-left">
+                                  <th className="pr-3">n</th><th className="pr-3">J</th><th className="pr-3">repeat</th>
+                                  <th className="pr-3">period</th><th className="pr-3">attacker/honest</th>
+                                  <th className="pr-3">attacker word_gs</th><th>honest word_gs</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {excluded.map((e) => (
+                                  <tr key={`${e.key}|${e.period}`} className="text-ink-300">
+                                    <td className="pr-3">{e.n}</td><td className="pr-3">{e.J}</td><td className="pr-3">{e.repeat}</td>
+                                    <td className="pr-3">{e.period}</td>
+                                    <td className="pr-3 text-amber-400">{e.word_ratio != null ? e.word_ratio.toFixed(2) : "n/a"}</td>
+                                    <td className="pr-3">{e.word_gs != null ? e.word_gs.toFixed(1) : "—"}</td>
+                                    <td>{e.honest_word_gs != null ? e.honest_word_gs.toFixed(1) : "—"}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   );
                 })()}
