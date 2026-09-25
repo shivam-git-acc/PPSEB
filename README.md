@@ -1,5 +1,8 @@
 # PPSEB Analysis Lab
 
+https://chatgpt.com/share/6ab67073-41cc-83ee-8451-94f2fefe725b
+
+
 An interactive lab for analyzing the PPSEB paper (Xu et al., 2022) — a
 lattice-based searchable-encryption scheme on blockchain — and demonstrating
 three concrete findings against it:
