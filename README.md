@@ -154,3 +154,43 @@ secret key: `PeriodDB` carries none, and a test runs it with the honest key
 replaced by an object that raises if touched. Keyword recovery and plaintext
 recovery are reported as separate claims, the latter only when Decrypt actually
 round-trips.
+
+### Security Boundary tab
+
+Runs **both** attacks on each (n, q) of a wide grid — n ∈ {4, 8, 16},
+q ∈ {257, 1153, 4001, 12289, 40961} — against the *same* frozen earlier-period
+database, and plots the measured outcome against an estimated bit-security
+axis. Attack 1 holds only the public key. Attack 2 steals the current period's
+secret key sk_r|J (J = 3 by default) and transforms it backward by the public
+R-product. Each attack climbs its own BKZ block-size ladder under its own
+budget.
+
+The verdict per cell is **relative**, and that is the point:
+
+| both attacks | verdict |
+|---|---|
+| control passed | `untrusted` (excluded from every count) |
+| public key broke it | `BROKEN (public-key only)` — the theft was redundant |
+| public key failed, stolen key broke it | `forward-security break (stolen key REQUIRED)` |
+| either ran out of budget | `unmeasured (timeout)` — never "secure" |
+| both ran to completion, neither broke | `attack failed (secure vs both, this budget)` |
+
+Only the third row demonstrates forward security failing. The tab counts those
+cells explicitly, and says so plainly when there are none.
+
+- Each cell runs in its own subprocess so the hard timeout can kill a running
+  BKZ. Small fast cells (n ≤ 8, q ≤ 1153) run 2 repeats, the rest 1; a break in
+  any repeat is a break, and a timeout can never overwrite one or be read as a
+  survival.
+- Results append to `backend/results/secbound_<job_id>.jsonl` per cell, with
+  `secbound_<job_id>.meta.json` for status. "Resume" re-runs nothing that
+  already finished. There is also an overall wall-clock cap (default 9 h): when
+  it is hit the job checkpoints and stops, and the cells it never reached are
+  simply absent — not reported as secure.
+- q = 4099 (asked for in the patch) is impossible here: H2's twisted binomial
+  needs q ≡ 1 (mod 4) when 4 | n, and 4099 ≡ 3 (mod 4), so every n in the grid
+  would be n/a. q = 4001 is substituted, and the substitution is carried in the
+  job config, the conclusion text and the UI.
+- The bit axis is an *estimate* (root-Hermite fit; the lattice-estimator
+  backend needs SageMath and is reported as unavailable rather than faked); the
+  break/no-break outcome is *measured*. They are never merged.

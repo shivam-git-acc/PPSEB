@@ -557,7 +557,8 @@ async def api_nq_sweep_jobs():
 
 
 # --------------------------------------------------------------------------
-# PATCH 14 — security boundary: public-key-only attack vs estimated bits
+# PATCH 14/15 — security boundary: public-key-only AND stolen-key attacks
+# on the same estimated-bits axis
 # --------------------------------------------------------------------------
 
 class BoundaryRequest(BaseModel):
@@ -566,8 +567,12 @@ class BoundaryRequest(BaseModel):
     records_per_period: int = Field(boundary.DEFAULT_RECORDS_PER_PERIOD, ge=2, le=51)
     seed: int = 1400
     beta_ladder: list[int] = Field(default_factory=lambda: list(boundary.DEFAULT_BETA_LADDER))
-    attack_budget_s: float = Field(boundary.DEFAULT_ATTACK_BUDGET_S, gt=0, le=3600)
+    attack_budget_s: float = Field(boundary.DEFAULT_ATTACK_BUDGET_S, gt=0, le=3 * 3600)
     cell_timeout_s: float = Field(boundary.DEFAULT_CELL_TIMEOUT_S, gt=0, le=6 * 3600)
+    max_hours: float = Field(boundary.DEFAULT_MAX_HOURS, gt=0, le=48)
+    run_stolen: bool = True
+    # PATCH 15: resuming an existing job skips every unit already in its JSONL.
+    job_id: Optional[str] = None
 
 
 @app.post("/api/boundary/start")
@@ -575,7 +580,8 @@ async def api_boundary_start(req: BoundaryRequest):
     job_id = boundary.start_job(
         grid=[tuple(c) for c in req.grid], J=req.J, records_per_period=req.records_per_period,
         seed=req.seed, beta_ladder=tuple(req.beta_ladder), attack_budget_s=req.attack_budget_s,
-        timeout_s=req.cell_timeout_s,
+        timeout_s=req.cell_timeout_s, max_hours=req.max_hours, run_stolen=req.run_stolen,
+        job_id=req.job_id,
     )
     return {"result": {"job_id": job_id}}
 

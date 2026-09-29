@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, ZAxis, Tooltip, Legend,
-  CartesianGrid, ReferenceArea, ReferenceLine, Cell as ReCell,
+  ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, ZAxis, Tooltip,
+  CartesianGrid, ReferenceArea, Cell as ReCell,
 } from "recharts";
 import { api } from "../api";
-import { Card, Badge, PrimaryButton, ErrorBanner } from "../components/Section";
+import { Card, Badge, PrimaryButton, SecondaryButton, ErrorBanner } from "../components/Section";
 
 const OUTCOMES = {
   broke: { y: 1, label: "broke", colour: "#ef4444" },
@@ -15,21 +15,41 @@ const OUTCOMES = {
   untrusted: { y: 5, label: "untrusted", colour: "#f59e0b" },
   error: { y: 5, label: "error", colour: "#6b2426" },
 };
+const STOLEN_COLOURS = { broke: "#fb923c", attack_failed: "#4ade80", "timed_out (unmeasured)": "#8a8a94" };
 const Y_TICKS = { 1: "broke", 2: "failed", 3: "unmeasured", 4: "n/a", 5: "untrusted" };
+const VERDICT_TONE = {
+  "BROKEN (public-key only)": "red",
+  "forward-security break (stolen key REQUIRED)": "amber",
+  "unmeasured (timeout)": "neutral",
+  "attack failed (secure vs both, this budget)": "green",
+  untrusted: "amber",
+  "n/a (not attacked)": "neutral",
+};
+const WIDE_GRID = [4, 8, 16].flatMap((n) => [257, 1153, 4001, 12289, 40961].map((q) => `${n}:${q}`)).join(", ");
 
 function parseGrid(text) {
   return text.split(",").map((pair) => pair.split(":").map((x) => parseInt(x.trim(), 10)))
     .filter(([n, q]) => Number.isFinite(n) && Number.isFinite(q));
 }
 
-function fmtBits(b) {
-  return b == null ? "—" : `${b.toFixed(1)}`;
+const fmtBits = (b) => (b == null ? "—" : b.toFixed(1));
+
+function outcomeOf(c) { return OUTCOMES[c.outcome] ?? OUTCOMES.error; }
+
+function NumberField({ label, value, onChange }) {
+  return (
+    <label className="block"><div className="text-ink-400 mb-1">{label}</div>
+      <input type="number" value={value} onChange={(e) => onChange(e.target.value)}
+        className="mono text-sm bg-ink-900 border border-ink-700 rounded px-2 py-1.5 w-full" /></label>
+  );
 }
 
 export default function SecurityBoundaryTab({ initialized }) {
-  const [gridText, setGridText] = useState("4:257, 8:257, 4:1153, 8:1153, 4:4001, 8:4001, 16:12289, 8:40961");
-  const [budget, setBudget] = useState(120);
-  const [cellTimeout, setCellTimeout] = useState(1800);
+  const [gridText, setGridText] = useState(WIDE_GRID);
+  const [budget, setBudget] = useState(600);
+  const [cellTimeout, setCellTimeout] = useState(2400);
+  const [maxHours, setMaxHours] = useState(9);
+  const [runStolen, setRunStolen] = useState(true);
   const [jobId, setJobId] = useState(null);
   const [snap, setSnap] = useState(null);
   const [error, setError] = useState(null);
@@ -59,14 +79,15 @@ export default function SecurityBoundaryTab({ initialized }) {
     return () => clearInterval(pollRef.current);
   }, [jobId]);
 
-  const start = async () => {
+  const start = async (resumeId = null) => {
     setError(null);
     setSelected(null);
     try {
       const r = await api.boundaryStart({
         grid: parseGrid(gridText), attack_budget_s: Number(budget), cell_timeout_s: Number(cellTimeout),
+        max_hours: Number(maxHours), run_stolen: runStolen, job_id: resumeId,
       });
-      setSnap(null);
+      if (!resumeId) setSnap(null);
       setJobId(r.result.job_id);
     } catch (e) {
       setError(String(e.message || e));
@@ -74,46 +95,66 @@ export default function SecurityBoundaryTab({ initialized }) {
   };
 
   const cells = snap?.cells ?? [];
-  const points = cells.filter((c) => c.bits != null).map((c) => ({
-    ...c, x: c.bits, y: (OUTCOMES[c.outcome] ?? OUTCOMES.error).y,
-    colour: (OUTCOMES[c.outcome] ?? OUTCOMES.error).colour,
+  const running = snap?.status === "running";
+  const withBits = cells.filter((c) => c.bits != null);
+  const pkPoints = withBits.map((c) => ({ ...c, x: c.bits, y: outcomeOf(c).y - 0.13, colour: outcomeOf(c).colour }));
+  const stolenPoints = withBits.filter((c) => c.stolen_outcome).map((c) => ({
+    ...c, x: c.bits, y: (OUTCOMES[c.stolen_outcome] ?? OUTCOMES.error).y + 0.13,
+    colour: STOLEN_COLOURS[c.stolen_outcome] ?? "#6b2426",
   }));
   const brokeBits = cells.filter((c) => c.outcome === "broke" && c.bits != null).map((c) => c.bits);
   const maxBroke = brokeBits.length ? Math.max(...brokeBits) : null;
-  const sized = cells.filter((c) => c.bits != null && c.trapdoor_bytes != null)
-    .map((c) => ({ ...c, x: c.bits, y: c.trapdoor_bytes }));
+  const sized = withBits.filter((c) => c.trapdoor_bytes != null).map((c) => ({ ...c, x: c.bits, y: c.trapdoor_bytes }));
+  const tally = snap?.stolen_key_tally;
 
   return (
     <div className="space-y-5 max-w-5xl">
       <Card title="Security Boundary"
-        subtitle="Where does the public-key-only attack (no secret key) succeed, against an estimated bit-security axis?">
+        subtitle="Public-key-only vs stolen-key attack, on one estimated bit-security axis">
         <p className="text-sm text-ink-300 leading-relaxed">
-          Each point is one (n, q). The x-axis is an <b>estimate</b> of how much lattice reduction it takes to
-          find, from the public key alone, a basis as good as the honest key holder's. The y-axis is the{" "}
-          <b>measured</b> outcome of actually running that attack under a fixed budget. The two are kept
-          separate: a point that ran out of budget is <b>unmeasured</b>, never "secure".
+          Each (n, q) runs <b>two</b> attacks against the <b>same</b> frozen earlier-period database.
+          Attack 1 holds only the public key. Attack 2 steals the current period's secret key sk<sub>r|J</sub>{" "}
+          and transforms it backward by the public R-product. The x-axis is an <b>estimate</b>; the outcome is{" "}
+          <b>measured</b>. The stolen key only demonstrates a forward-security break where the public key
+          alone <i>failed</i> — so a cell the public key already breaks is reported as redundant theft, not
+          as a forward-security break. A point that ran out of budget is <b>unmeasured</b>, never "secure".
         </p>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs mt-4">
-          <label className="block md:col-span-3"><div className="text-ink-400 mb-1">grid as n:q pairs</div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs mt-4">
+          <label className="block col-span-2 md:col-span-4"><div className="text-ink-400 mb-1">grid as n:q pairs</div>
             <input value={gridText} onChange={(e) => setGridText(e.target.value)}
               className="mono text-sm bg-ink-900 border border-ink-700 rounded px-2 py-1.5 w-full" /></label>
-          <label className="block"><div className="text-ink-400 mb-1">attack budget per cell (s)</div>
-            <input type="number" value={budget} onChange={(e) => setBudget(e.target.value)}
-              className="mono text-sm bg-ink-900 border border-ink-700 rounded px-2 py-1.5 w-full" /></label>
-          <label className="block"><div className="text-ink-400 mb-1">hard cell timeout (s)</div>
-            <input type="number" value={cellTimeout} onChange={(e) => setCellTimeout(e.target.value)}
-              className="mono text-sm bg-ink-900 border border-ink-700 rounded px-2 py-1.5 w-full" /></label>
-          <div className="flex items-end">
-            <PrimaryButton onClick={start} disabled={!initialized || snap?.status === "running"}>
-              {snap?.status === "running" ? `Running… ${snap.done}/${snap.total}` : "Run boundary sweep"}
-            </PrimaryButton>
-          </div>
+          <NumberField label="attack budget / cell (s)" value={budget} onChange={setBudget} />
+          <NumberField label="hard cell timeout (s)" value={cellTimeout} onChange={setCellTimeout} />
+          <NumberField label="overall cap (hours)" value={maxHours} onChange={setMaxHours} />
+          <label className="flex items-end gap-2 pb-1.5 text-ink-300">
+            <input type="checkbox" checked={runStolen} onChange={(e) => setRunStolen(e.target.checked)} />
+            run the stolen-key attack
+          </label>
+        </div>
+        <div className="flex gap-3 items-center mt-3">
+          <PrimaryButton onClick={() => start(null)} disabled={!initialized || running}>
+            {running ? `Running… ${snap.units_done}/${snap.units_total} units` : "Run wide sweep"}
+          </PrimaryButton>
+          {jobId && !running && (
+            <SecondaryButton onClick={() => start(jobId)}>Resume {jobId} (skips finished cells)</SecondaryButton>
+          )}
+          <span className="text-xs text-ink-500">Checkpointed per cell — you can close the tab.</span>
         </div>
         <ErrorBanner message={error} />
         {snap && (
           <div className="text-xs text-ink-500 mono mt-3">
-            {snap.job_id} · {snap.status} · {snap.done}/{snap.total} cells · {snap.elapsed_s?.toFixed(0)}s
-            {cells[0]?.estimate && <> · estimator: {cells[0].estimate.backend}</>}
+            {snap.job_id} · {snap.status} · {snap.done}/{snap.total} cells ({snap.units_done}/{snap.units_total} units)
+            · {snap.elapsed_s?.toFixed(0)}s{cells[0]?.estimate && <> · estimator: {cells[0].estimate.backend}</>}
+          </div>
+        )}
+        {snap?.stopped_early && (
+          <div className="text-xs text-amber-400 bg-amber-500/10 border border-amber-600/30 rounded px-3 py-2 mt-2">
+            ⚠ {snap.stopped_early}
+          </div>
+        )}
+        {snap?.config?.q_substitution_note && (
+          <div className="text-[11px] text-ink-500 mt-2 leading-relaxed">
+            Deviation from the patch, stated: {snap.config.q_substitution_note}
           </div>
         )}
         {jobs.length > 0 && (
@@ -127,15 +168,15 @@ export default function SecurityBoundaryTab({ initialized }) {
         )}
       </Card>
 
-      {points.length > 0 && (
-        <Card title="Estimated security (bits) vs measured attack outcome"
-          subtitle="Red = the public key alone gave a working trapdoor. Grey = the attack ran out of budget: unmeasured, not secure.">
-          <ResponsiveContainer width="100%" height={300}>
+      {pkPoints.length > 0 && (
+        <Card title="Estimated security (bits) vs measured outcome — both attacks"
+          subtitle="Circle = public key only. Triangle = stolen key. Red/orange = the attack got a working trapdoor; grey = out of budget, i.e. unmeasured.">
+          <ResponsiveContainer width="100%" height={320}>
             <ScatterChart margin={{ top: 10, right: 20, bottom: 28, left: 8 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#2a2a30" />
               {maxBroke != null && (
                 <ReferenceArea x1={0} x2={maxBroke} fill="#ef4444" fillOpacity={0.09}
-                  label={{ value: `empirically broken ≤ ~${maxBroke.toFixed(0)} bits`, fill: "#ef4444", fontSize: 11, position: "insideTopLeft" }} />
+                  label={{ value: `public key alone breaks ≤ ~${maxBroke.toFixed(0)} bits`, fill: "#ef4444", fontSize: 11, position: "insideTopLeft" }} />
               )}
               <XAxis type="number" dataKey="x" name="estimated bits" stroke="#8a8a94" fontSize={11}
                 domain={[0, "dataMax + 10"]}
@@ -145,29 +186,43 @@ export default function SecurityBoundaryTab({ initialized }) {
               <ZAxis range={[90, 90]} />
               <Tooltip
                 contentStyle={{ background: "#16161a", border: "1px solid #2a2a30", fontSize: 12 }}
-                formatter={(_v, _n, p) => {
+                formatter={(_v, name, p) => {
                   const c = p.payload;
-                  return [`n=${c.n}, q=${c.q}, m=${c.m} — ${c.outcome}${c.beta_used ? `, broke at BKZ-${c.beta_used}` : ""}`, "cell"];
+                  const isPk = name === "public key only";
+                  const outcome = isPk ? c.outcome : c.stolen_outcome;
+                  const beta = isPk ? c.pk_beta : c.stolen_beta;
+                  return [`n=${c.n}, q=${c.q}, m=${c.m} — ${outcome}${beta ? `, at BKZ-${beta}` : ""}`, name];
                 }} />
-              <Scatter name="(n, q) cells" data={points} onClick={(p) => setSelected(p)}>
-                {points.map((p) => (
-                  <ReCell key={`${p.n}-${p.q}`} fill={p.colour}
+              <Scatter name="public key only" data={pkPoints} shape="circle" onClick={(p) => setSelected(p)}>
+                {pkPoints.map((p) => (
+                  <ReCell key={`pk-${p.n}-${p.q}`} fill={p.colour}
+                    stroke={p.paper_demo ? "#e5e5ea" : undefined} strokeWidth={p.paper_demo ? 2 : 0} />
+                ))}
+              </Scatter>
+              <Scatter name="stolen key" data={stolenPoints} shape="triangle" onClick={(p) => setSelected(p)}>
+                {stolenPoints.map((p) => (
+                  <ReCell key={`st-${p.n}-${p.q}`} fill={p.colour}
                     stroke={p.paper_demo ? "#e5e5ea" : undefined} strokeWidth={p.paper_demo ? 2 : 0} />
                 ))}
               </Scatter>
             </ScatterChart>
           </ResponsiveContainer>
           <div className="flex gap-4 flex-wrap text-[11px] mt-1">
-            {Object.entries(OUTCOMES).filter(([k]) => k !== "n/a (H2)" && k !== "error").map(([k, v]) => (
-              <span key={k} className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded-full inline-block" style={{ background: v.colour }} />
-                <span className="text-ink-500">{v.label}</span>
-              </span>
-            ))}
+            <span className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-full inline-block" style={{ background: "#ef4444" }} />
+              <span className="text-ink-500">public key alone broke it</span></span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-3 h-3 inline-block" style={{ background: "#fb923c", clipPath: "polygon(50% 0, 100% 100%, 0 100%)" }} />
+              <span className="text-ink-500">stolen key broke it</span></span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-full inline-block" style={{ background: "#4ade80" }} />
+              <span className="text-ink-500">attack ran, failed</span></span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-full inline-block" style={{ background: "#8a8a94" }} />
+              <span className="text-ink-500">unmeasured (timeout)</span></span>
             <span className="flex items-center gap-1.5">
               <span className="w-3 h-3 rounded-full inline-block border-2" style={{ borderColor: "#e5e5ea" }} />
-              <span className="text-ink-500">paper's demo parameters</span>
-            </span>
+              <span className="text-ink-500">paper's demo parameters</span></span>
           </div>
           {cells.some((c) => c.paper_demo && c.outcome === "broke") && (
             <div className="text-xs text-signal-red bg-signal-red/10 border border-signal-red/30 rounded px-3 py-2.5 mt-3">
@@ -176,6 +231,48 @@ export default function SecurityBoundaryTab({ initialized }) {
               the parameters it evaluates.
             </div>
           )}
+        </Card>
+      )}
+
+      {tally && (
+        <Card title="Does the stolen key help?"
+          subtitle="A forward-security break requires the public key to FAIL and the stolen key to succeed — everything else is redundant theft or unmeasured.">
+          <div className="flex gap-3 flex-wrap mb-4">
+            <Badge tone={tally.stolen_helps.length ? "amber" : "green"}>
+              stolen key required: {tally.stolen_helps.length}/{tally.considered}
+            </Badge>
+            <Badge tone="red">both broke (theft redundant): {tally.both_broke.length}</Badge>
+            <Badge tone="red">public key only: {tally.pk_only.length}</Badge>
+            <Badge tone="green">neither broke: {tally.neither.length}</Badge>
+            <Badge tone="neutral">unmeasured: {tally.unmeasured.length}</Badge>
+            <Badge tone="neutral">excluded (untrusted / n/a): {tally.excluded.length}</Badge>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
+            {cells.map((c) => (
+              <button key={`${c.n}-${c.q}`} onClick={() => setSelected(c)}
+                className="border border-ink-800 rounded px-2.5 py-2 text-left hover:border-ink-600">
+                <div className="mono text-[11px] text-ink-300">n={c.n}, q={c.q}</div>
+                <div className="flex gap-1.5 mt-1.5 text-[10px]">
+                  <span className={c.pk_broke ? "text-signal-red" : "text-ink-500"}>
+                    {c.pk_broke ? "● pk broke" : "○ pk"}
+                  </span>
+                  <span className={c.stolen_broke ? "text-amber-400" : "text-ink-500"}>
+                    {c.stolen_broke ? "▲ stolen broke" : "△ stolen"}
+                  </span>
+                </div>
+                <div className="text-[10px] mt-1" style={{ color: c.stolen_helps ? "#fb923c" : "#6b6b76" }}>
+                  {c.stolen_helps ? "stolen key REQUIRED" : c.verdict}
+                </div>
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-ink-400 mt-3 leading-relaxed">
+            In {tally.stolen_helps.length} of {tally.considered} cells where both attacks ran, the stolen key
+            succeeded where the public key alone failed (genuine forward-security break); in{" "}
+            {tally.both_broke.length} cells both broke (stolen key redundant); in {tally.neither.length} cells
+            neither broke within budget. {tally.unmeasured.length} cell(s) are unmeasured and{" "}
+            {tally.excluded.length} excluded — neither counts as security.
+          </p>
         </Card>
       )}
 
@@ -216,10 +313,11 @@ export default function SecurityBoundaryTab({ initialized }) {
               <thead>
                 <tr className="text-left text-ink-500 uppercase">
                   <th className="pb-2 pr-3">n</th><th className="pb-2 pr-3">q</th><th className="pb-2 pr-3">m</th>
-                  <th className="pb-2 pr-3">bits (est)</th><th className="pb-2 pr-3">β needed (est)</th>
-                  <th className="pb-2 pr-3">outcome</th><th className="pb-2 pr-3">β used</th>
-                  <th className="pb-2 pr-3">target norm</th><th className="pb-2 pr-3">bytes</th>
-                  <th className="pb-2">runtime</th>
+                  <th className="pb-2 pr-3">bits (est)</th>
+                  <th className="pb-2 pr-3">pk attack</th><th className="pb-2 pr-3">β</th>
+                  <th className="pb-2 pr-3">stolen attack</th><th className="pb-2 pr-3">β</th>
+                  <th className="pb-2 pr-3">verdict</th>
+                  <th className="pb-2 pr-3">rep</th><th className="pb-2">runtime</th>
                 </tr>
               </thead>
               <tbody>
@@ -230,11 +328,15 @@ export default function SecurityBoundaryTab({ initialized }) {
                     <td className="py-1.5 pr-3">{c.q}</td>
                     <td className="py-1.5 pr-3">{c.m}</td>
                     <td className="py-1.5 pr-3">{fmtBits(c.bits)}</td>
-                    <td className="py-1.5 pr-3">{c.estimate?.beta ?? (c.estimate?.below_fit_range ? "<50" : "—")}</td>
-                    <td className="py-1.5 pr-3" style={{ color: (OUTCOMES[c.outcome] ?? OUTCOMES.error).colour }}>{c.outcome}</td>
-                    <td className="py-1.5 pr-3">{c.beta_used ?? "—"}</td>
-                    <td className="py-1.5 pr-3">{c.target_norm ? c.target_norm.toFixed(2) : "—"}</td>
-                    <td className="py-1.5 pr-3">{c.trapdoor_bytes}</td>
+                    <td className="py-1.5 pr-3" style={{ color: outcomeOf(c).colour }}>{c.pk_outcome ?? c.outcome}</td>
+                    <td className="py-1.5 pr-3">{c.pk_beta ?? "—"}</td>
+                    <td className="py-1.5 pr-3" style={{ color: STOLEN_COLOURS[c.stolen_outcome] ?? "#6b6b76" }}>
+                      {c.stolen_outcome ?? "—"}</td>
+                    <td className="py-1.5 pr-3">{c.stolen_beta ?? "—"}</td>
+                    <td className="py-1.5 pr-3">
+                      <Badge tone={VERDICT_TONE[c.verdict] ?? "neutral"}>{c.verdict ?? "—"}</Badge>
+                    </td>
+                    <td className="py-1.5 pr-3">{c.repeats ?? 1}</td>
                     <td className="py-1.5">{c.runtime_s ? `${c.runtime_s.toFixed(0)}s` : "—"}</td>
                   </tr>
                 ))}
@@ -247,12 +349,13 @@ export default function SecurityBoundaryTab({ initialized }) {
 
       {selected && (
         <Card title={`n=${selected.n}, q=${selected.q} — detail`}>
-          <div className="text-xs space-y-2">
+          <div className="text-xs space-y-3">
             <div className="text-ink-300">
-              outcome <span style={{ color: (OUTCOMES[selected.outcome] ?? OUTCOMES.error).colour }}>{selected.outcome}</span>
+              verdict <span style={{ color: selected.stolen_helps ? "#fb923c" : outcomeOf(selected).colour }}>{selected.verdict}</span>
               {selected.gate_failed_checks?.length > 0 && <> · honest gate failed: <span className="mono">{selected.gate_failed_checks.join(", ")}</span></>}
               {selected.control && <> · control {selected.control.passed ? "PASSED (untrusted)" : "failed, as required"}</>}
               {selected.honest_trapdoor_s != null && <> · one Trapdoor call {selected.honest_trapdoor_s.toFixed(2)}s</>}
+              {selected.periods_back != null && <> · attacked period {selected.target_period} ({selected.periods_back} back)</>}
             </div>
             {selected.estimate && (
               <div className="text-ink-400">
@@ -264,21 +367,34 @@ export default function SecurityBoundaryTab({ initialized }) {
                 <div className="mt-1 text-ink-500">{selected.estimate.note}</div>
               </div>
             )}
-            {selected.attempts?.length > 0 && (
-              <table className="mono text-[11px]">
-                <thead><tr className="text-left text-ink-500"><th className="pr-3">BKZ β</th><th className="pr-3">basis GS</th><th className="pr-3">N0* / N0</th><th className="pr-3">break</th><th>time</th></tr></thead>
-                <tbody>
-                  {selected.attempts.map((a) => (
-                    <tr key={a.beta} className="text-ink-300">
-                      <td className="pr-3">{a.beta}</td>
-                      <td className="pr-3">{a.gs_norm.toFixed(2)}</td>
-                      <td className="pr-3">{a.N0_star ?? "—"} / {a.N0_legit}</td>
-                      <td className={`pr-3 ${a.break ? "text-signal-red" : ""}`}>{String(a.break)}</td>
-                      <td>{a.runtime_s.toFixed(1)}s</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            {[["Attack 1 — public key only", selected.pk_attempts],
+              ["Attack 2 — stolen sk_r|J, transformed backward", selected.stolen_attempts]]
+              .filter(([, rows]) => rows?.length).map(([title, rows]) => (
+              <div key={title}>
+                <div className="text-ink-400 mb-1">{title}</div>
+                <table className="mono text-[11px]">
+                  <thead><tr className="text-left text-ink-500">
+                    <th className="pr-3">BKZ β</th><th className="pr-3">basis GS</th><th className="pr-3">L1 norm ok</th>
+                    <th className="pr-3">N0* / N0</th><th className="pr-3">break</th><th>time</th></tr></thead>
+                  <tbody>
+                    {rows.map((a) => (
+                      <tr key={a.beta} className="text-ink-300">
+                        <td className="pr-3">{a.beta}</td>
+                        <td className="pr-3">{a.gs_norm != null ? a.gs_norm.toFixed(2) : (a.error ?? "—")}</td>
+                        <td className="pr-3">{a.level1_norm_ok == null ? "—" : String(a.level1_norm_ok)}</td>
+                        <td className="pr-3">{a.N0_star ?? "—"} / {a.N0_legit ?? "—"}</td>
+                        <td className={`pr-3 ${a.break ? "text-signal-red" : ""}`}>{String(!!a.break)}</td>
+                        <td>{a.runtime_s?.toFixed(1)}s</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
+            {selected.repeat_outcomes && (
+              <div className="text-ink-500">
+                repeats: {selected.repeat_outcomes.map((r) => `seed ${r.seed}: pk ${r.pk}, stolen ${r.stolen}`).join(" · ")}
+              </div>
             )}
           </div>
         </Card>

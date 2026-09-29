@@ -21,7 +21,8 @@ MARKER = "@@BOUNDARY_JSON@@"
 def main() -> None:
     a = json.loads(sys.argv[1])
     cell = run_boundary_cell(a["n"], a["q"], a["J"], a["records_per_period"], a["seed"],
-                             tuple(a["beta_ladder"]), a["attack_budget_s"])
+                             tuple(a["beta_ladder"]), a["attack_budget_s"],
+                             run_stolen=a.get("run_stolen", True))
     print(MARKER + json.dumps(jsonable(cell)))
 
 
