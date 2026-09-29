@@ -423,7 +423,7 @@ def verify_search(CT: tuple, trap: np.ndarray, params: Params, trace: Trace | No
 def build_frozen_history(
     J: int, params: Params, seed: int = 0, h1_variant: str = "low_norm",
     strengthen_legit: bool = True, dictionary: tuple[str, ...] = DICTIONARY,
-    records_per_period: int = RECORDS_PER_PERIOD,
+    records_per_period: int = RECORDS_PER_PERIOD, honest_checks: bool = False,
     trace: Trace | None = None, max_seed_retries: int = 4,
 ) -> tuple[list[PeriodDB], np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Thin retry wrapper around `_build_frozen_history_once`.
@@ -448,7 +448,7 @@ def build_frozen_history(
             result = _build_frozen_history_once(
                 J, params, seed=seed + attempt, h1_variant=h1_variant,
                 strengthen_legit=strengthen_legit, dictionary=dictionary,
-                records_per_period=records_per_period, trace=trace,
+                records_per_period=records_per_period, honest_checks=honest_checks, trace=trace,
             )
             if attempt > 0 and trace is not None:
                 trace.note(
@@ -474,7 +474,7 @@ def build_frozen_history(
 def _build_frozen_history_once(
     J: int, params: Params, seed: int = 0, h1_variant: str = "low_norm",
     strengthen_legit: bool = True, dictionary: tuple[str, ...] = DICTIONARY,
-    records_per_period: int = RECORDS_PER_PERIOD,
+    records_per_period: int = RECORDS_PER_PERIOD, honest_checks: bool = False,
     trace: Trace | None = None,
 ) -> tuple[list[PeriodDB], np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Builds and FREEZES the honest doctor's database at periods 0..J-1,
@@ -563,16 +563,43 @@ def _build_frozen_history_once(
             cm_entries.append((n_id, encrypt_record(pk, M, u_pke, params, rng, pyrng, trace)))
         CM = tuple(cm_entries)
 
-        target_id, target_kw, _target_M = records[GROUND_TRUTH_IDX]
+        target_id, target_kw, target_M = records[GROUND_TRUTH_IDX]
         legit_trap = trapdoor(pk, sk, target_kw, i, mu, params, pyrng, trace)
         N0_legit = verify_search(CT, legit_trap, params, trace)
-        assert N0_legit is not None, f"legit doctor must find its own record at period {i}"
+        if not honest_checks:
+            assert N0_legit is not None, f"legit doctor must find its own record at period {i}"
 
         # PATCH 06 §6.5 -- honest baseline for the period/word/trap norm
         # cross-check. Computed here (while `sk` is still in scope) because
         # PeriodDB deliberately carries no secret key; only the resulting
         # NUMBERS are kept, for reporting -- never the basis itself.
         honest_chain_norms = _basis_chain_norms(pk, sk, target_kw, i, mu, params, pyrng)
+
+        checks = None
+        if honest_checks:
+            # PATCH 13 correctness gate, recorded (not asserted) so a sweep can
+            # mark the cell n/a with the exact failing check. A separate RNG for
+            # the decryption keeps the main stream -- and every attack outcome
+            # for this seed -- identical to a run without checks.
+            check_rng = random.Random(int.from_bytes(
+                hashlib.sha256(f"{seed}|{i}|honest_checks".encode()).digest()[:4], "big"))
+            threshold = usability_threshold(params)["threshold"]
+            M_star = decrypt_record(pk, sk, next(c for (n_id, c) in CM if n_id == target_id), u_pke,
+                                    params, check_rng)
+            checks = {
+                "kernel_ok": bool(np.all(mat_mod_mixed(pk, sk, q) == 0)),
+                "match_ok": N0_legit is not None,
+                "nonmatch_ok": not any(
+                    verify(c1, c2, legit_trap, params)[0] for (n_id, c1, c2) in CT if n_id != target_id
+                ),
+                "search_ok": N0_legit == target_id,
+                "decrypt_ok": M_star == target_M,
+                "period_gs": honest_chain_norms["period_gs"],
+                "word_gs": honest_chain_norms["word_gs"],
+                "threshold": threshold,
+                "period_usable": bool(honest_chain_norms["period_gs"] < threshold),
+                "word_usable": bool(honest_chain_norms["word_gs"] < threshold),
+            }
 
         if h1_variant == "low_norm":
             R = H1(pk, i + 1, params)
@@ -582,7 +609,7 @@ def _build_frozen_history_once(
 
         history.append(PeriodDB(
             period=i, pk_ri=pk, records=records, CT=CT, CM=CM,
-            legit_trap_demo={"keyword": target_kw, "N0": N0_legit, **honest_chain_norms},
+            legit_trap_demo={"keyword": target_kw, "N0": N0_legit, "checks": checks, **honest_chain_norms},
             R_into_next=R, ct_hash=_hash_ct(CT), cm_hash=_hash_cm(CM),
         ))
 

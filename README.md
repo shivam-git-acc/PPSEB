@@ -122,3 +122,22 @@ Things to know before launching a long run:
   break with its ratio, and the conclusion won't call a run a negative result
   while any exist.
 - Plots A–D export as SVG/PNG, and the raw data as CSV/JSONL.
+
+### n × q grid (Batch Sweep → "n × q grid")
+
+For each (n, q), with m = 2n·⌈log2 q⌉ derived per cell, the grid checks that the
+honest doctor's chain is correct: A·T ≡ 0, matching and non-matching keywords
+verify correctly, search returns the right record, decryption round-trips, and
+the period basis is under the usability threshold. Only then does it run two
+attacks: one using the **public key only**, and the **stolen-key** backward
+attack. A public-key-only break outranks a stolen-key break, because it means
+no secret was needed. The negative control is a genuine short trapdoor for an
+unrelated lattice, which must not find the doctor's record.
+
+- The default q list is 257, 1153, 4001. The original 4099 can't work for
+  n=4 or 8: `x^n − c` is never irreducible when 4 | n and q ≡ 3 (mod 4).
+- Cells take minutes, not seconds. At n=4, cells took 96–285s; n=8 is much
+  slower. The per-cell timeout defaults to 1 hour, and a timed-out cell is
+  "untested", never "secure".
+- The honest word-basis-vs-threshold number is shown but not used as a gate
+  (it's the check PATCH 09 found to be wrong).

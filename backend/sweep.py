@@ -147,8 +147,9 @@ def unit_key(n: int, J: int, variant: str, reducer: str, repeat: int, seed: int)
 
 def h2_dimension_valid(n: int, q: int) -> bool:
     """H2's twisted binomial x^n - c exists only when every prime factor of
-    n divides q-1 (Lidl-Niederreiter). Checked directly rather than by
-    trial-and-error so preflight can explain WHY a cell is doomed."""
+    n divides q-1 and, if 4 | n, q = 1 (mod 4) (Lidl-Niederreiter 3.75).
+    Checked directly rather than by trial-and-error so preflight can explain
+    WHY a cell is doomed."""
     if n < 1:
         return False
     remaining, f = n, 2
@@ -160,6 +161,8 @@ def h2_dimension_valid(n: int, q: int) -> bool:
         f += 1
     if remaining > 1:
         factors.add(remaining)
+    if n % 4 == 0 and q % 4 != 1:
+        return False
     return all((q - 1) % p == 0 for p in factors)
 
 

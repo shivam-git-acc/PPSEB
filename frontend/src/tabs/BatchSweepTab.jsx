@@ -5,6 +5,7 @@ import {
 } from "recharts";
 import { api } from "../api";
 import { Card, Badge, PrimaryButton, SecondaryButton, ErrorBanner } from "../components/Section";
+import NqSweepPanel from "./NqSweepPanel";
 
 const OUTCOME_STYLE = {
   survives: { bg: "bg-signal-green/25", text: "text-signal-green", label: "survives" },
@@ -366,7 +367,7 @@ export default function BatchSweepTab({ initialized }) {
           excluded from the conclusion — never counted as "survives".
         </p>
         <div className="flex gap-2 mt-4">
-          {["configure", "run", "results"].map((v) => (
+          {["configure", "run", "results", "nq"].map((v) => (
             <button
               key={v}
               onClick={() => {
@@ -377,13 +378,15 @@ export default function BatchSweepTab({ initialized }) {
                 view === v ? "border-signal-blue text-ink-100" : "border-ink-700 text-ink-400 hover:text-ink-200"
               }`}
             >
-              {v === "configure" ? "Configure" : v === "run" ? "Run / progress" : "Results"}
+              {v === "configure" ? "Configure" : v === "run" ? "Run / progress" : v === "results" ? "Results" : "n × q grid"}
             </button>
           ))}
         </div>
       </Card>
 
       <ErrorBanner message={error} />
+
+      {view === "nq" && <NqSweepPanel initialized={initialized} />}
 
       {view === "configure" && (
         <Card title="Configure the grid">

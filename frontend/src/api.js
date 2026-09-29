@@ -40,5 +40,8 @@ export const api = {
   sweepResults: (jobId, gate = "strict") => get(`/sweep/results?job_id=${encodeURIComponent(jobId)}&gate=${gate}`),
   sweepStop: (jobId) => post(`/sweep/stop?job_id=${encodeURIComponent(jobId)}`, {}),
   sweepJobs: () => get("/sweep/jobs"),
+  nqSweepStart: (body) => post("/nq-sweep/start", body),
+  nqSweepStatus: (jobId) => get(`/nq-sweep/status?job_id=${encodeURIComponent(jobId)}`),
+  nqSweepJobs: () => get("/nq-sweep/jobs"),
   sweepExportUrl: (jobId, fmt) => `${BASE}/sweep/export?job_id=${encodeURIComponent(jobId)}&fmt=${fmt}`,
 };

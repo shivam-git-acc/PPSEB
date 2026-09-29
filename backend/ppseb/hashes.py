@@ -113,15 +113,11 @@ def _irreducible_twist(n: int, q: int) -> int:
     entries are literally the (small) input coefficients, instead of an
     opaque companion-matrix expansion that spreads them across all of Z_q.
 
-    KNOWN LIMITATION: x^n - c is irreducible over GF(q) only for n whose
-    every prime factor divides ord(GF(q)*) = q-1 (Lidl-Niederreiter's
-    binomial irreducibility criterion) — for q=257, q-1=256=2^8, so this
-    holds only for n a power of 2 (2, 4, 8, 16, ...). n=6 (a factor of 3,
-    which does not divide 256) has NO valid c at all, for any q with
-    q-1=256 — not a search failure, a genuine non-existence. Callers that
-    need to vary n (e.g. attacks.end_to_end's dimension sweep) should pick
-    n from {2, 4, 8, 16, ...} when q=257, or a different q whose q-1 shares
-    n's prime factors otherwise.
+    KNOWN LIMITATION: x^n - c is irreducible over GF(q) for some c only if
+    (1) every prime factor of n divides q-1, and (2) q = 1 (mod 4) whenever
+    4 divides n (Lidl-Niederreiter, Theorem 3.75). For q=257 (q-1=2^8) that
+    allows exactly the powers of 2. Condition (2) matters too: q=4099 has
+    q-1 = 2*3*683, so n=4 and n=8 satisfy (1) but fail (2), and no c exists.
     """
     from sympy.polys.galoistools import gf_irreducible_p
     for c in range(2, q):
@@ -129,9 +125,8 @@ def _irreducible_twist(n: int, q: int) -> int:
         if gf_irreducible_p(f, q, ZZ):
             return c
     raise RuntimeError(
-        f"no irreducible x^{n} - c exists mod q={q}: every prime factor of n must "
-        f"divide q-1={q - 1}. For q=257 (q-1=256=2^8), n must be a power of 2 "
-        f"(2, 4, 8, 16, ...); n={n} has a prime factor that does not divide 256."
+        f"no irreducible x^{n} - c exists mod q={q}: needs every prime factor of n to "
+        f"divide q-1={q - 1}, and q = 1 (mod 4) when 4 divides n (q mod 4 = {q % 4})."
     )
 
 
@@ -152,11 +147,17 @@ def _twisted_circulant(a: list[int], c: int, q: int) -> np.ndarray:
 
 
 def H2(w: str, j: int, params: Params, trace: Trace | None = None) -> np.ndarray:
-    """H2(w, j) -> beta in Z_q^{m x m}. For w != w', beta(w,j) - beta(w',j) is
-    invertible mod q (full-rank-difference property), because it is the
-    block-diagonal repetition of the matrix representing multiplication by a
-    nonzero element of the field GF(q^n) — and in a field, multiplication by
-    any nonzero element is a bijection, hence its matrix is invertible.
+    """H2(w, j) -> beta in Z_q^{m x m}. Whenever w and w' map to DIFFERENT
+    field elements a != a', beta(w,j) - beta(w',j) is invertible mod q
+    (full-rank-difference property): it is the block-diagonal repetition of
+    multiplication by the nonzero field element a - a' in GF(q^n), a bijection.
+
+    NOT collision-free. The coefficients come from a hash into
+    H2_COEFF_RANGE**n elements -- only 11^4 = 14,641 at n=4 -- independent of
+    q. Distinct keywords can land on the SAME element, and then their betas are
+    identical and an honest trapdoor for one verifies against the other's
+    ciphertexts. Measured: "cirrhosis" and "laryngitis" collide at period 2 for
+    every q. At n=8 the space is 11^8 (~2e8) and collisions are rare.
 
     Low-norm, not just FRD: CLAUDE.md notes H2's output is also "used in
     NewBasisDel" (Trapdoor, §3.6) exactly where KeyExt uses H1's R — and

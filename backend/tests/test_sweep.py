@@ -315,6 +315,11 @@ def test_h2_dimension_valid_matches_the_real_constraint():
         assert sweep.h2_dimension_valid(n, 257)
     for n in (3, 5, 6, 7, 9, 10, 12):
         assert not sweep.h2_dimension_valid(n, 257)
+    # q = 3 (mod 4): prime factors of 4 divide q-1, but x^4 - c is never irreducible.
+    assert not sweep.h2_dimension_valid(4, 4099)
+    assert not sweep.h2_dimension_valid(8, 4099)
+    assert sweep.h2_dimension_valid(2, 4099)
+    assert sweep.h2_dimension_valid(4, 4001) and sweep.h2_dimension_valid(8, 4001)
 
 
 # --- gate bias, reproducibility, multi-process safety --------------------

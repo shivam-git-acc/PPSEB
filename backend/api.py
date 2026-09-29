@@ -34,6 +34,7 @@ from attacks.forward_sec import (
 from attacks.end_to_end import end_to_end_experiment, end_to_end_multi_n, DEFAULT_END_TO_END_N_VALUES
 from attacks.spec_defect import run_paper_version, run_corrected_version
 import sweep
+from attacks import nq_sweep
 
 # MUST happen here, at import time, on the MAIN thread: fpylll's cysignals
 # dependency installs signal handlers on import and raises
@@ -514,6 +515,42 @@ async def api_sweep_export(job_id: str, fmt: str = "csv"):
         body = "\n".join(json.dumps(r) for r in sweep.load_records(job_id))
         return PlainTextResponse(body, media_type="application/x-ndjson")
     raise HTTPException(400, "fmt must be 'csv' or 'jsonl'")
+
+
+# --------------------------------------------------------------------------
+# PATCH 13 — (n, q) sweep: correctness-gated, public-key-only vs stolen-key
+# --------------------------------------------------------------------------
+
+class NqSweepRequest(BaseModel):
+    n_values: list[int] = Field(default_factory=lambda: list(nq_sweep.DEFAULT_N_VALUES))
+    q_values: list[int] = Field(default_factory=lambda: list(nq_sweep.DEFAULT_Q_VALUES))
+    J: int = Field(nq_sweep.DEFAULT_J, ge=2, le=8)
+    repeats: int = Field(nq_sweep.DEFAULT_REPEATS, ge=1, le=10)
+    records_per_period: int = Field(nq_sweep.DEFAULT_RECORDS_PER_PERIOD, ge=2, le=51)
+    seed_base: int = 1300
+    cell_timeout_s: float = Field(nq_sweep.DEFAULT_CELL_TIMEOUT_S, gt=0, le=6 * 3600)
+
+
+@app.post("/api/nq-sweep/start")
+async def api_nq_sweep_start(req: NqSweepRequest):
+    job_id = nq_sweep.start_job(
+        n_values=req.n_values, q_values=req.q_values, J=req.J, repeats=req.repeats,
+        records_per_period=req.records_per_period, seed_base=req.seed_base, timeout_s=req.cell_timeout_s,
+    )
+    return {"result": {"job_id": job_id}}
+
+
+@app.get("/api/nq-sweep/status")
+async def api_nq_sweep_status(job_id: str):
+    snap = nq_sweep.job_snapshot(job_id)
+    if snap is None:
+        raise HTTPException(404, f"no such (n, q) sweep job: {job_id}")
+    return {"result": snap}
+
+
+@app.get("/api/nq-sweep/jobs")
+async def api_nq_sweep_jobs():
+    return {"result": nq_sweep.list_jobs()}
 
 
 @app.exception_handler(Exception)
