@@ -37,6 +37,7 @@ import sweep
 from attacks import nq_sweep
 from attacks import boundary
 from attacks import security_estimate
+from attacks import pk_demo
 
 # MUST happen here, at import time, on the MAIN thread: fpylll's cysignals
 # dependency installs signal handlers on import and raises
@@ -596,6 +597,33 @@ async def api_boundary_jobs():
 async def api_boundary_estimate(n: int, q: int, target_norm: float, sigma: float = 4.0):
     from ppseb.params import derived_m
     return {"result": security_estimate.estimate_bits(n, q, derived_m(n, q), target_norm, sigma)}
+
+
+# --------------------------------------------------------------------------
+# PATCH 16 — public-key-only break demo
+# --------------------------------------------------------------------------
+
+class PkDemoRequest(BaseModel):
+    n: int = Field(pk_demo.DEFAULT_N, ge=2, le=16)
+    q: int = Field(pk_demo.DEFAULT_Q, ge=17)
+    seed: int = 1600
+    records: int = Field(pk_demo.DEFAULT_RECORDS, ge=2, le=10)
+    beta: int = Field(pk_demo.DEMO_BETA, ge=2, le=40)
+    dictionary: list[str] = Field(default_factory=lambda: list(pk_demo.DISEASE_DICTIONARY))
+
+
+@app.post("/api/pk-demo/run")
+async def api_pk_demo_run(req: PkDemoRequest):
+    """`async def` for the same cysignals/main-thread reason as the other
+    BKZ-using endpoints. Takes ~35s at the default parameters."""
+    if len(req.dictionary) < 2:
+        raise HTTPException(400, "the dictionary needs at least two diseases")
+    result = pk_demo.run_public_key_demo(
+        n=req.n, q=req.q, seed=req.seed, records=req.records,
+        dictionary=tuple(req.dictionary), beta=req.beta,
+    )
+    params = Params(n=req.n, q=req.q, sigma=SESSION.params.sigma, l=SESSION.params.l, m=0)
+    return envelope({k: v for k, v in result.items() if k != "trace"}, result["trace"], params)
 
 
 @app.exception_handler(Exception)

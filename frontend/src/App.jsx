@@ -11,6 +11,7 @@ import ForwardSecTab from "./tabs/ForwardSecTab";
 import SpecDefectTab from "./tabs/SpecDefectTab";
 import BatchSweepTab from "./tabs/BatchSweepTab";
 import SecurityBoundaryTab from "./tabs/SecurityBoundaryTab";
+import PublicKeyBreakTab from "./tabs/PublicKeyBreakTab";
 
 const TABS = [
   { id: "overview", label: "Overview" },
@@ -20,6 +21,7 @@ const TABS = [
   { id: "spec", label: "Spec Defect" },
   { id: "sweep", label: "Batch Sweep" },
   { id: "boundary", label: "Security Boundary" },
+  { id: "pkbreak", label: "Public-Key Break" },
 ];
 
 export default function App() {
@@ -99,6 +101,7 @@ export default function App() {
             {tab === "spec" && <SpecDefectTab {...tabProps} />}
             {tab === "sweep" && <BatchSweepTab {...tabProps} />}
             {tab === "boundary" && <SecurityBoundaryTab {...tabProps} />}
+            {tab === "pkbreak" && <PublicKeyBreakTab {...tabProps} />}
           </div>
         </main>
 

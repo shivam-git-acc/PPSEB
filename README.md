@@ -141,3 +141,16 @@ unrelated lattice, which must not find the doctor's record.
   "untested", never "secure".
 - The honest word-basis-vs-threshold number is shown but not used as a gate
   (it's the check PATCH 09 found to be wrong).
+
+### Public-Key Break tab
+
+Shows the consequence of the parameter finding concretely: holding only the
+public key, the public ciphertext database and a list of diseases, the attacker
+labels each encrypted record with its disease. Measured at the paper's
+parameters (n=4, q=257) it recovers every record's tag — and, with that same
+basis, the full record plaintexts — at LLL-level effort (BKZ block size 2),
+while a basis from an unrelated lattice recovers nothing. The attack receives no
+secret key: `PeriodDB` carries none, and a test runs it with the honest key
+replaced by an object that raises if touched. Keyword recovery and plaintext
+recovery are reported as separate claims, the latter only when Decrypt actually
+round-trips.

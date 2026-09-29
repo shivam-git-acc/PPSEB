@@ -43,6 +43,7 @@ export const api = {
   nqSweepStart: (body) => post("/nq-sweep/start", body),
   nqSweepStatus: (jobId) => get(`/nq-sweep/status?job_id=${encodeURIComponent(jobId)}`),
   nqSweepJobs: () => get("/nq-sweep/jobs"),
+  pkDemoRun: (body) => post("/pk-demo/run", body),
   boundaryStart: (body) => post("/boundary/start", body),
   boundaryStatus: (jobId) => get(`/boundary/status?job_id=${encodeURIComponent(jobId)}`),
   boundaryJobs: () => get("/boundary/jobs"),
