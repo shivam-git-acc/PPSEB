@@ -423,7 +423,7 @@ def verify_search(CT: tuple, trap: np.ndarray, params: Params, trace: Trace | No
 def build_frozen_history(
     J: int, params: Params, seed: int = 0, h1_variant: str = "low_norm",
     strengthen_legit: bool = True, dictionary: tuple[str, ...] = DICTIONARY,
-    records_per_period: int = RECORDS_PER_PERIOD, honest_checks: bool = False,
+    records_per_period: int = RECORDS_PER_PERIOD, honest_checks: bool = False, honest_decrypt_all: bool = False,
     trace: Trace | None = None, max_seed_retries: int = 4,
 ) -> tuple[list[PeriodDB], np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Thin retry wrapper around `_build_frozen_history_once`.
@@ -448,7 +448,8 @@ def build_frozen_history(
             result = _build_frozen_history_once(
                 J, params, seed=seed + attempt, h1_variant=h1_variant,
                 strengthen_legit=strengthen_legit, dictionary=dictionary,
-                records_per_period=records_per_period, honest_checks=honest_checks, trace=trace,
+                records_per_period=records_per_period, honest_checks=honest_checks,
+                honest_decrypt_all=honest_decrypt_all, trace=trace,
             )
             if attempt > 0 and trace is not None:
                 trace.note(
@@ -474,7 +475,7 @@ def build_frozen_history(
 def _build_frozen_history_once(
     J: int, params: Params, seed: int = 0, h1_variant: str = "low_norm",
     strengthen_legit: bool = True, dictionary: tuple[str, ...] = DICTIONARY,
-    records_per_period: int = RECORDS_PER_PERIOD, honest_checks: bool = False,
+    records_per_period: int = RECORDS_PER_PERIOD, honest_checks: bool = False, honest_decrypt_all: bool = False,
     trace: Trace | None = None,
 ) -> tuple[list[PeriodDB], np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Builds and FREEZES the honest doctor's database at periods 0..J-1,
@@ -586,7 +587,25 @@ def _build_frozen_history_once(
             threshold = usability_threshold(params)["threshold"]
             M_star = decrypt_record(pk, sk, next(c for (n_id, c) in CM if n_id == target_id), u_pke,
                                     params, check_rng)
+            # Opt-in (PATCH 16): the honest doctor's own decryption of EVERY
+            # record, so an attacker's failed plaintext recovery can be compared
+            # against what the true secret key manages at the same parameters.
+            # Off by default -- it costs one SamplePre per record, and the
+            # sweeps run 40 records a period.
+            decrypt_per_record = None
+            if honest_decrypt_all:
+                decrypt_per_record = {}
+                for (n_id, cm_entry) in CM:
+                    true_M = next(M for (i2, _kw2, M) in records if i2 == n_id)
+                    rec_rng = random.Random(int.from_bytes(hashlib.sha256(
+                        f"{seed}|{i}|{n_id}|honest_decrypt".encode()).digest()[:4], "big"))
+                    try:
+                        decrypt_per_record[n_id] = bool(
+                            decrypt_record(pk, sk, cm_entry, u_pke, params, rec_rng) == true_M)
+                    except Exception:  # noqa: BLE001
+                        decrypt_per_record[n_id] = False
             checks = {
+                "decrypt_per_record": decrypt_per_record,
                 "kernel_ok": bool(np.all(mat_mod_mixed(pk, sk, q) == 0)),
                 "match_ok": N0_legit is not None,
                 "nonmatch_ok": not any(

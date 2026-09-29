@@ -102,3 +102,29 @@ def test_collision_ambiguity_not_counted_as_recovery():
     scored = demo._score(labels, {0: "cirrhosis", 1: "asthma"}, [["cirrhosis", "laryngitis"]])
     assert scored["recovered"] == 1 and scored["ambiguous"] == 1
     assert scored["rows"][0]["collision_ambiguous"] and not scored["rows"][0]["correct"]
+
+
+def test_doctor_decryption_reported_per_record(result):
+    """The honest doctor's own decryption of the SAME records, so an attacker's
+    plaintext failure can be told apart from the scheme failing at these
+    parameters."""
+    per_record = result["honest_decrypt"]
+    assert len(per_record) == len(result["records"])
+    assert all(isinstance(v, bool) for v in per_record.values())
+    assert result["honest_decrypt_count"] == sum(1 for v in per_record.values() if v)
+    for row in result["level3"]:
+        assert isinstance(row["doctor_ok"], bool)
+        assert row["bits"] > 0
+    assert "honest doctor using the TRUE secret key" in result["conclusion"]
+
+
+def test_doctor_decrypt_uses_the_secret_key_not_the_attack_basis(monkeypatch):
+    """The doctor's column must come from the honest key inside history
+    construction, so breaking the attacker's decrypt cannot change it."""
+    def broken_decrypt(*a, **kw):
+        raise RuntimeError("attacker decrypt disabled")
+
+    monkeypatch.setattr(demo, "decrypt_record", broken_decrypt)
+    out = demo.run_public_key_demo(seed=1600, records=4)
+    assert all(not r["ok"] for r in out["level3"])
+    assert out["honest_decrypt_count"] >= 1, "the doctor's own decryption should be unaffected"

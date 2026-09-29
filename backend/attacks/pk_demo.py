@@ -138,7 +138,8 @@ def run_public_key_demo(n: int = DEFAULT_N, q: int = DEFAULT_Q, seed: int = 1600
 
     history, _stolen_pk, _stolen_sk, mu, u_pke = build_frozen_history(
         max(period + 1, 2), p, seed=seed, records_per_period=records,
-        dictionary=tuple(dictionary), honest_checks=True, max_seed_retries=0, trace=None,
+        dictionary=tuple(dictionary), honest_checks=True, honest_decrypt_all=True,
+        max_seed_retries=0, trace=None,
     )
     db = history[period]
     truth = {n_id: kw for (n_id, kw, _m) in db.records}
@@ -179,6 +180,7 @@ def run_public_key_demo(n: int = DEFAULT_N, q: int = DEFAULT_Q, seed: int = 1600
     ctrl_scored = _score(ctrl_labels, truth, collisions)
 
     # Level 3 is a separate, stronger claim: only reported if Decrypt round-trips.
+    honest_decrypt = honest.get("decrypt_per_record") or {}
     level3 = []
     for row in scored["rows"]:
         if not row["correct"]:
@@ -191,7 +193,10 @@ def run_public_key_demo(n: int = DEFAULT_N, q: int = DEFAULT_Q, seed: int = 1600
         except Exception:  # noqa: BLE001
             got, ok = b"", False
         level3.append({"record": n_id, "recovered_plaintext": got.decode(errors="replace") if ok else None,
-                       "ok": bool(ok)})
+                       "ok": bool(ok),
+                       "doctor_ok": bool(honest_decrypt.get(n_id, False)),
+                       "bits": len(plaintexts[n_id].encode()) * 8})
+    doctor_ok_count = sum(1 for v in honest_decrypt.values() if v)
 
     conclusion = (
         f"Holding only the public key, the disease dictionary and the public ciphertext "
@@ -206,8 +211,12 @@ def run_public_key_demo(n: int = DEFAULT_N, q: int = DEFAULT_Q, seed: int = 1600
            f"matched records. " if any(r["ok"] for r in level3) else
            "Record plaintext did NOT decrypt with this basis (the record decode bound is stricter), "
            "so only the disease tag was recovered. ")
-        + ("The honest doctor's own decryption also fails at these parameters, so that is a limit of the "
-           "scheme here, not of the attack. " if not honest["decrypt_ok"] else "")
+        + (f"For comparison, the honest doctor using the TRUE secret key decrypted "
+           f"{doctor_ok_count}/{len(honest_decrypt)} of the same records"
+           + (", so plaintext failures here are the scheme's noise setting at these parameters, not a "
+              "limit of the attack. " if doctor_ok_count < len(honest_decrypt) else
+              ", so the attack-derived basis is the weaker of the two for plaintext. ")
+           if honest_decrypt else "")
         + "No key compromise was needed to learn which disease each encrypted record concerns."
     )
     trace.result("Public-key-only recovery", detail=conclusion,
@@ -224,6 +233,8 @@ def run_public_key_demo(n: int = DEFAULT_N, q: int = DEFAULT_Q, seed: int = 1600
         "records": [{"record": n_id, "true_disease": truth[n_id], "plaintext": plaintexts[n_id]}
                     for n_id in sorted(truth)],
         "honest_checks": honest,
+        "honest_decrypt": {str(k): v for k, v in honest_decrypt.items()},
+        "honest_decrypt_count": doctor_ok_count,
         "h2_collisions": collisions,
         "norms": norms,
         "basis_on_lattice": on_lattice,

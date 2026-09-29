@@ -50,6 +50,8 @@ export default function PublicKeyBreakTab({ initialized }) {
   };
 
   const level3Ok = res?.level3?.filter((r) => r.ok) ?? [];
+  const doctorTotal = res ? Object.keys(res.honest_decrypt ?? {}).length : 0;
+  const doctorOk = res?.honest_decrypt_count ?? 0;
 
   return (
     <div className="space-y-5 max-w-4xl">
@@ -111,6 +113,9 @@ export default function PublicKeyBreakTab({ initialized }) {
               <Badge tone={level3Ok.length ? "red" : "neutral"}>
                 {level3Ok.length ? `${level3Ok.length}/${res.level3.length} full plaintexts decrypted` : "no plaintext recovered"}
               </Badge>
+              <Badge tone={doctorOk === doctorTotal ? "green" : "amber"}>
+                doctor (true secret key): {doctorOk}/{doctorTotal} decrypted
+              </Badge>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm mono">
@@ -149,24 +154,48 @@ export default function PublicKeyBreakTab({ initialized }) {
           </Card>
 
           <Card title="Full record plaintext (a separate, stronger claim)"
-            subtitle="Only reported when Decrypt with the attack-derived basis actually round-trips">
-            {level3Ok.length === 0 ? (
-              <p className="text-sm text-ink-400">
-                The record plaintext did not decrypt with this basis — the record decode bound is stricter than the
-                keyword test. Only the disease tag was recovered.
-                {res.honest_checks && !res.honest_checks.decrypt_ok &&
-                  " The honest doctor's own decryption also fails at these parameters, so that limit is the scheme's, not the attack's."}
-              </p>
-            ) : (
-              <div className="space-y-1">
-                {level3Ok.map((r) => (
-                  <div key={r.record} className="text-sm">
-                    <span className="text-ink-500 mono">#{r.record}</span>{" "}
-                    <span className="text-signal-red mono">{r.recovered_plaintext}</span>
-                  </div>
-                ))}
-              </div>
-            )}
+            subtitle="Attacker's public-key basis vs the doctor's true secret key, on the same records">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm mono">
+                <thead>
+                  <tr className="text-left text-ink-500 text-xs uppercase">
+                    <th className="pb-2 pr-4">record</th>
+                    <th className="pb-2 pr-4">bits</th>
+                    <th className="pb-2 pr-4">attacker (public key only)</th>
+                    <th className="pb-2 pr-4">doctor (true secret key)</th>
+                    <th className="pb-2">recovered plaintext</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.keys(res.honest_decrypt ?? {}).map((key) => {
+                    const id = Number(key);
+                    const att = res.level3.find((r) => r.record === id);
+                    const doc = res.honest_decrypt[key];
+                    return (
+                      <tr key={id} className="border-t border-ink-800">
+                        <td className="py-1.5 pr-4 text-ink-400">#{id}</td>
+                        <td className="py-1.5 pr-4 text-ink-500">{att?.bits ?? "—"}</td>
+                        <td className={`py-1.5 pr-4 ${att?.ok ? "text-signal-red" : "text-ink-500"}`}>
+                          {att ? (att.ok ? "✓ decrypted" : "✗ failed") : "tag not recovered"}
+                        </td>
+                        <td className={`py-1.5 pr-4 ${doc ? "text-signal-green" : "text-amber-400"}`}>
+                          {doc ? "✓ decrypted" : "✗ failed"}
+                        </td>
+                        <td className="py-1.5 text-signal-red text-xs">{att?.recovered_plaintext ?? ""}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-ink-400 mt-3 leading-relaxed">
+              Each record is ~{res.level3[0]?.bits ?? 330} separate one-bit LWE ciphertexts, and every bit must
+              decode correctly for the record to match — versus {res.n && "30"} slots for the keyword test. A single
+              wrong bit fails the record.
+              {doctorOk < doctorTotal
+                ? " The doctor fails on some records too, with the true secret key, so those failures are the scheme's noise setting at these parameters rather than a limit of the attack."
+                : " The doctor decrypts every record, so any attacker failure here is down to the attack-derived basis being slightly worse."}
+            </p>
           </Card>
 
           <Card title="Conclusion">
