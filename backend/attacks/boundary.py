@@ -36,7 +36,8 @@ from ppseb.trace import jsonable
 
 from .end_to_end import build_frozen_history, _test_candidate
 from .nq_sweep import GATE_CHECKS, h2_valid, negative_control_unrelated_key
-from .security_estimate import estimate_bits, lattice_estimator_available, trapdoor_bytes
+from .security_estimate import (estimate_bits, gaussian_heuristic, lattice_estimator_available,
+                                 trapdoor_bytes)
 
 DEFAULT_GRID = ((4, 257), (8, 257), (4, 1153), (8, 1153), (4, 4001), (8, 4001),
                 (16, 12289), (8, 40961))
@@ -97,6 +98,7 @@ def run_boundary_cell(n: int, q: int, J: int = DEFAULT_J,
     target_norm = checks[0]["period_gs"]
     cell["target_norm"] = target_norm
     cell["estimate"] = estimate_bits(n, q, m, target_norm, sigma=p.sigma)
+    cell["estimate"]["target_provenance"] = "measured honest basis"
     cell["bits"] = cell["estimate"]["bits"]
 
     # Cost of one Trapdoor call at these parameters (PATCH 14 §4's timing proxy).
@@ -174,12 +176,25 @@ def run_cell_with_timeout(n, q, J, records_per_period, seed, beta_ladder, attack
     m = derived_m(n, q)
     base = {"n": n, "q": q, "m": m, "paper_demo": is_paper_demo(n, q),
             "trapdoor_bytes": trapdoor_bytes(m, q)}
+    # A cell that dies on the timeout returns nothing, so estimate it HERE too --
+    # otherwise the unmeasured cells carry no bits and cannot be plotted at all,
+    # which is exactly the half of the picture they exist to populate. The honest
+    # basis was never measured, so the target norm is the Gaussian heuristic (the
+    # lattice's expected shortest vector), and the record says so.
+    fallback_target = gaussian_heuristic(n, q, m)
+    fallback = estimate_bits(n, q, m, fallback_target, sigma=default_params().sigma)
+    fallback["target_provenance"] = "gaussian_heuristic (honest basis not measured)"
+    base["estimate"] = fallback
+    base["bits"] = fallback["bits"]
+    base["target_norm"] = fallback_target
     try:
         proc = subprocess.run([sys.executable, "-m", "attacks.boundary_cell_worker", payload],
                               capture_output=True, text=True, timeout=timeout_s,
                               cwd=str(Path(__file__).resolve().parent.parent))
     except subprocess.TimeoutExpired:
-        return {**base, "outcome": OUTCOME_TIMEOUT, "timed_out": True, "runtime_s": time.time() - started}
+        return {**base, "outcome": OUTCOME_TIMEOUT, "timed_out": True,
+                "timeout_note": "killed at the cell timeout; it may not have reached the attack ladder",
+                "runtime_s": time.time() - started}
     line = next((ln for ln in proc.stdout.splitlines() if ln.startswith(boundary_cell_worker.MARKER)), None)
     if line is None:
         detail = (proc.stderr or proc.stdout or "worker produced no output").strip()

@@ -129,3 +129,14 @@ def test_paper_demo_cell_breaks_from_public_key_alone(paper_cell):
     assert paper_cell["paper_demo"]
     assert paper_cell["outcome"] == bd.OUTCOME_BROKE
     assert paper_cell["control"]["passed"] is False
+
+
+def test_timed_out_cell_still_carries_a_plottable_estimate():
+    """A killed cell returns no result of its own, but must still have bits --
+    the unmeasured cells are half the plot."""
+    cell = bd.run_cell_with_timeout(16, 12289, J=2, records_per_period=6, seed=1400,
+                                    beta_ladder=(2,), attack_budget_s=5.0, timeout_s=20)
+    assert cell["outcome"] == bd.OUTCOME_TIMEOUT and cell["timed_out"]
+    assert cell["bits"] is not None and cell["bits"] > 0
+    assert cell["estimate"]["target_provenance"].startswith("gaussian_heuristic")
+    assert cell["trapdoor_bytes"] > 0
