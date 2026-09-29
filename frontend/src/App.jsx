@@ -10,6 +10,7 @@ import KgaTab from "./tabs/KgaTab";
 import ForwardSecTab from "./tabs/ForwardSecTab";
 import SpecDefectTab from "./tabs/SpecDefectTab";
 import BatchSweepTab from "./tabs/BatchSweepTab";
+import SecurityBoundaryTab from "./tabs/SecurityBoundaryTab";
 
 const TABS = [
   { id: "overview", label: "Overview" },
@@ -18,6 +19,7 @@ const TABS = [
   { id: "forward", label: "Forward Security" },
   { id: "spec", label: "Spec Defect" },
   { id: "sweep", label: "Batch Sweep" },
+  { id: "boundary", label: "Security Boundary" },
 ];
 
 export default function App() {
@@ -96,6 +98,7 @@ export default function App() {
             {tab === "forward" && <ForwardSecTab {...tabProps} />}
             {tab === "spec" && <SpecDefectTab {...tabProps} />}
             {tab === "sweep" && <BatchSweepTab {...tabProps} />}
+            {tab === "boundary" && <SecurityBoundaryTab {...tabProps} />}
           </div>
         </main>
 
