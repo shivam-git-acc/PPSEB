@@ -47,5 +47,13 @@ export const api = {
   boundaryStart: (body) => post("/boundary/start", body),
   boundaryStatus: (jobId) => get(`/boundary/status?job_id=${encodeURIComponent(jobId)}`),
   boundaryJobs: () => get("/boundary/jobs"),
+  networkOptions: () => get("/network/options"),
+  networkNew: (body) => post("/network/new", body),
+  networkState: (id) => get(`/network/state?session_id=${encodeURIComponent(id)}`),
+  networkRecord: (body) => post("/network/record", body),
+  networkSearch: (body) => post("/network/search", body),
+  networkAdvance: (body) => post("/network/advance", body),
+  networkDecrypt: (body) => post("/network/decrypt", body),
+  networkAttack: (body) => post("/network/attack", body),
   sweepExportUrl: (jobId, fmt) => `${BASE}/sweep/export?job_id=${encodeURIComponent(jobId)}&fmt=${fmt}`,
 };

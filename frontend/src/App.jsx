@@ -12,6 +12,7 @@ import SpecDefectTab from "./tabs/SpecDefectTab";
 import BatchSweepTab from "./tabs/BatchSweepTab";
 import SecurityBoundaryTab from "./tabs/SecurityBoundaryTab";
 import PublicKeyBreakTab from "./tabs/PublicKeyBreakTab";
+import NetworkTab from "./tabs/NetworkTab";
 
 const TABS = [
   { id: "overview", label: "Overview" },
@@ -22,6 +23,7 @@ const TABS = [
   { id: "sweep", label: "Batch Sweep" },
   { id: "boundary", label: "Security Boundary" },
   { id: "pkbreak", label: "Public-Key Break" },
+  { id: "network", label: "Network" },
 ];
 
 export default function App() {
@@ -102,6 +104,7 @@ export default function App() {
             {tab === "sweep" && <BatchSweepTab {...tabProps} />}
             {tab === "boundary" && <SecurityBoundaryTab {...tabProps} />}
             {tab === "pkbreak" && <PublicKeyBreakTab {...tabProps} />}
+            {tab === "network" && <NetworkTab {...tabProps} />}
           </div>
         </main>
 

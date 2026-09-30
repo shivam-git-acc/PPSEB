@@ -194,3 +194,57 @@ cells explicitly, and says so plainly when there are none.
 - The bit axis is an *estimate* (root-Hermite fit; the lattice-estimator
   backend needs SageMath and is reported as unavailable rather than faked); the
   break/no-break outcome is *measured*. They are never merged.
+
+### Network tab
+
+The whole scheme staged as four live nodes — doctor, cloud, verifier, attacker
+— driven by hand. The doctor stores records (PEKS keyword + encrypted record)
+under the current period key, searches (trapdoor → verifier → matching record
+number), advances the period (KeyExt) and decrypts any stored record. The
+cloud is dumb storage. The verifier runs the **public** Verify, which is
+exactly what makes both attacks possible.
+
+The attacker picks an attack and ticks which periods to hit:
+
+- **Public-key only** — a basis built from `pk_r|i` and reduced. No secret.
+- **Stolen key** — one period's secret key is stolen and transformed backward
+  by the public R-product. Reaching *forward* is rejected; only periods
+  earlier than the theft are tickable.
+
+Every stolen-key period also reports whether the public key alone would have
+recovered it, so the demo can never imply the theft was necessary when it was
+not. A period is flagged as a genuine forward-security break only when the
+stolen key recovered it **and** the public key alone did not.
+
+Honesty rules, enforced in the data:
+
+- The attack is handed a period view whose records tuple is **empty** — no
+  keyword, no plaintext, and (as `PeriodDB` has no such field) no secret key
+  can reach it. Scoring against the truth happens outside the attack.
+- Attacker plaintext is shown only when Decrypt with the attack-derived basis
+  round-trips; otherwise the row reads "keyword ✓ / plaintext ✗ (decode
+  bound)". The doctor's decrypt is always real.
+- Stored blobs are hashed when written and re-checked after every attack, so
+  an attack that regenerated a ciphertext would be caught.
+- A period whose attack exceeds its budget reads "unmeasured (timeout)", never
+  "secure". The budget is checked between dictionary words, so one long
+  reduction can overrun it; the measured runtime is always reported.
+- The "use a garbage key" toggle runs the same flow from an unrelated
+  lattice's basis. It must recover nothing.
+- Decrypting a record from an *earlier* period uses a key that forward
+  security assumes was deleted. The simulator keeps it so the true plaintext
+  can sit beside the attacker's attempt, and says so on screen rather than
+  implying the scheme allows it.
+
+`n` and `q` are selectable from the same grid as the Security Boundary tab,
+with `m = 2n⌈log2 q⌉` derived live. A pair H2 cannot support, or one where the
+honest scheme fails its correctness gate, comes back "not available" with the
+reason instead of a broken demo. **"Run demo script"** walks the whole story
+hands-free: store records → honest search and decrypt → evolve the key →
+public-key attack → stolen-key attack with the comparison strip → garbage
+control.
+
+Note on reuse: PATCH 18 describes the stolen-key backward attack as new. It
+already existed here (`attacks/end_to_end.py`, and on the boundary axis in
+`attacks/boundary.py`), so this tab calls that tested code rather than keeping
+a second copy of the R-product transform.

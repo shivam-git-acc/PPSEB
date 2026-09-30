@@ -36,6 +36,7 @@ from attacks.spec_defect import run_paper_version, run_corrected_version
 import sweep
 from attacks import nq_sweep
 from attacks import boundary
+import network as network_sim
 from attacks import security_estimate
 from attacks import pk_demo
 
@@ -630,6 +631,132 @@ async def api_pk_demo_run(req: PkDemoRequest):
     )
     params = Params(n=req.n, q=req.q, sigma=SESSION.params.sigma, l=SESSION.params.l, m=0)
     return envelope({k: v for k, v in result.items() if k != "trace"}, result["trace"], params)
+
+
+# --------------------------------------------------------------------------
+# PATCH 18 — the Network tab: doctor / cloud / verifier / attacker simulation
+# --------------------------------------------------------------------------
+
+class NetworkNewRequest(BaseModel):
+    n: int = Field(network_sim.PAPER_DEFAULT[0], ge=2, le=16)
+    q: int = Field(network_sim.PAPER_DEFAULT[1], ge=17)
+    seed: int = 18
+
+
+class NetworkRecordRequest(BaseModel):
+    session_id: str
+    keyword: str
+    text: str = Field(min_length=1, max_length=200)
+
+
+class NetworkKeywordRequest(BaseModel):
+    session_id: str
+    keyword: str
+
+
+class NetworkSessionRequest(BaseModel):
+    session_id: str
+
+
+class NetworkDecryptRequest(BaseModel):
+    session_id: str
+    record_id: int
+
+
+class NetworkAttackRequest(BaseModel):
+    session_id: str
+    kind: str = "public_key"
+    periods: list[int]
+    stolen_period: Optional[int] = None
+    control: bool = False
+    beta: int = Field(network_sim.DEMO_BETA, ge=2, le=40)
+    budget_s: float = Field(network_sim.DEFAULT_ATTACK_BUDGET_S, gt=0, le=1800)
+
+
+def _network(session_id: str) -> "network_sim.NetworkSession":
+    try:
+        return network_sim.get_session(session_id)
+    except KeyError as e:
+        raise HTTPException(404, str(e))
+
+
+def _network_envelope(session, result: dict, trace=None) -> dict:
+    """Every network call returns the new state alongside its own result, so
+    the canvas never has to guess what changed."""
+    return envelope({**result, "state": session.state()}, trace or [], session.params)
+
+
+@app.get("/api/network/options")
+async def api_network_options():
+    return {"result": network_sim.parameter_options()}
+
+
+@app.post("/api/network/new")
+async def api_network_new(req: NetworkNewRequest):
+    """A rebuild at new (n, q). An (n, q) that fails H2 or the correctness gate
+    comes back `available: false` with the reason, rather than a broken demo."""
+    session = network_sim.new_session(n=req.n, q=req.q, seed=req.seed)
+    return _network_envelope(session, {"created": True})
+
+
+@app.get("/api/network/state")
+async def api_network_state(session_id: str):
+    return _network_envelope(_network(session_id), {})
+
+
+@app.post("/api/network/record")
+async def api_network_record(req: NetworkRecordRequest):
+    session = _network(req.session_id)
+    try:
+        event = session.add_record(req.keyword, req.text)
+    except (ValueError, RuntimeError) as e:
+        raise HTTPException(400, str(e))
+    return _network_envelope(session, {"event": event})
+
+
+@app.post("/api/network/search")
+async def api_network_search(req: NetworkKeywordRequest):
+    session = _network(req.session_id)
+    try:
+        event = session.search(req.keyword)
+    except RuntimeError as e:
+        raise HTTPException(400, str(e))
+    return _network_envelope(session, {"event": event})
+
+
+@app.post("/api/network/advance")
+async def api_network_advance(req: NetworkSessionRequest):
+    session = _network(req.session_id)
+    try:
+        event = session.advance_period()
+    except RuntimeError as e:
+        raise HTTPException(400, str(e))
+    return _network_envelope(session, {"event": event})
+
+
+@app.post("/api/network/decrypt")
+async def api_network_decrypt(req: NetworkDecryptRequest):
+    session = _network(req.session_id)
+    try:
+        event = session.doctor_decrypt(req.record_id)
+    except (ValueError, RuntimeError) as e:
+        raise HTTPException(400, str(e))
+    return _network_envelope(session, {"event": event})
+
+
+@app.post("/api/network/attack")
+async def api_network_attack(req: NetworkAttackRequest):
+    """`async def` for the same cysignals/main-thread reason as the other
+    BKZ-using endpoints."""
+    session = _network(req.session_id)
+    try:
+        result = session.attack(req.kind, req.periods, stolen_period=req.stolen_period,
+                                control=req.control, beta=req.beta, budget_s=req.budget_s)
+    except (ValueError, RuntimeError) as e:
+        raise HTTPException(400, str(e))
+    return _network_envelope(session, {k: v for k, v in result.items() if k != "trace"},
+                             result["trace"])
+
 
 
 @app.exception_handler(Exception)
