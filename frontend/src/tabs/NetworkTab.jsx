@@ -96,6 +96,79 @@ const input = "mono text-xs bg-ink-900 border border-ink-700 rounded px-2 py-1.5
 // switch reattaches to the live one instead of throwing the cloud away.
 let cachedSessionId = null;
 
+const ORDER = ["public_key", "stolen_key", "control"];
+
+function AttackResult({ res, stale }) {
+  const title = res.control ? "negative control (garbage key)"
+    : res.kind === "public_key" ? "public key only" : `stolen sk_r|${res.stolen_period}`;
+  return (
+    <Card title={`Attack result — ${title}`}
+      subtitle={`${res.periods.length} period(s) attacked, against ${res.records_at_run} stored record(s)`}>
+      {stale && (
+        <div className="text-[11px] text-amber-400 bg-amber-500/10 border border-amber-600/30 rounded px-2.5 py-1.5 mb-3">
+          ⚠ The cloud has changed since this run — these numbers describe the database as it was then.
+          Re-launch to score the current one.
+        </div>
+      )}
+      {res.periods.map((p) => (
+        <div key={p.period} className="mb-4 last:mb-0">
+          <div className="flex items-center gap-2 flex-wrap mb-2">
+            <Badge tone={p.outcome === "recovered" ? "red" : p.outcome === "unmeasured (timeout)" ? "neutral" : "green"}>
+              period {p.period}: {p.outcome} {p.recovered != null && `${p.recovered}/${p.total}`}
+            </Badge>
+            {p.forward_security_break && <Badge tone="amber">★ genuine forward-security break</Badge>}
+            {p.basis_gs != null && (
+              <span className="text-[11px] text-ink-500 mono">
+                attack basis GS {p.basis_gs.toFixed(2)}
+                {p.honest_gs != null && ` vs honest ${p.honest_gs.toFixed(2)}`}
+              </span>
+            )}
+          </div>
+          {p.comparison_note && (
+            <div className={`text-[11px] mb-2 ${p.forward_security_break ? "text-amber-400" : "text-ink-400"}`}>
+              {p.forward_security_break ? "★ " : "↳ "}{p.comparison_note}
+            </div>
+          )}
+          {p.error && <div className="text-[11px] text-signal-red mono">{p.error}</div>}
+          {p.rows?.length > 0 && (
+            <table className="w-full mono text-[11px]">
+              <thead><tr className="text-left text-ink-500">
+                <th className="pb-1 pr-3">record</th><th className="pb-1 pr-3">recovered disease</th>
+                <th className="pb-1 pr-3">true disease</th><th className="pb-1 pr-3">ciphertext</th>
+                <th className="pb-1">plaintext</th>
+              </tr></thead>
+              <tbody>
+                {p.rows.map((r) => (
+                  <tr key={r.record_id} className="border-t border-ink-800">
+                    <td className="py-1 pr-3 text-ink-400">#{r.record_id}</td>
+                    <td className={`py-1 pr-3 ${r.correct ? "text-signal-red" : "text-ink-500"}`}>
+                      {r.recovered?.length ? r.recovered.join(", ") : "—"}
+                    </td>
+                    <td className="py-1 pr-3 text-ink-300">{r.true_disease}</td>
+                    <td className="py-1 pr-3 text-ink-500">{r.ciphertext_fetched}</td>
+                    <td className="py-1">
+                      {r.level3 ? <span className="text-signal-red">“{r.plaintext}”</span>
+                        : r.correct ? <span className="text-ink-500">keyword ✓ / plaintext ✗ (decode bound)</span>
+                          : <span className="text-ink-600">—</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          {p.h2_collisions?.length > 0 && (
+            <div className="text-[11px] text-amber-400 mt-1">
+              Dictionary words sharing an H2 tag ({p.h2_collisions.map((c) => c.join("/")).join("; ")}) cannot be
+              told apart by any searcher, honest or not.
+            </div>
+          )}
+        </div>
+      ))}
+      <div className="text-sm text-ink-200 leading-relaxed border-t border-ink-800 pt-3">{res.conclusion}</div>
+    </Card>
+  );
+}
+
 export default function NetworkTab({ onTrace }) {
   const [options, setOptions] = useState(null);
   const [n, setN] = useState(4);
@@ -106,7 +179,7 @@ export default function NetworkTab({ onTrace }) {
   const [activeEdge, setActiveEdge] = useState(null);
   const [pulse, setPulse] = useState(0);
   const [lastEvent, setLastEvent] = useState(null);
-  const [attackRes, setAttackRes] = useState(null);
+  const [results, setResults] = useState({});   // keyed by attack, so each run persists
   const [script, setScript] = useState(null);
 
   const [keyword, setKeyword] = useState("diabetes");
@@ -116,7 +189,7 @@ export default function NetworkTab({ onTrace }) {
 
   const [attackKind, setAttackKind] = useState("public_key");
   const [stolenPeriod, setStolenPeriod] = useState(null);
-  const [ticked, setTicked] = useState([]);
+  const [periodSel, setPeriodSel] = useState("all");
   const [control, setControl] = useState(false);
   const cancelScript = useRef(false);
 
@@ -126,12 +199,12 @@ export default function NetworkTab({ onTrace }) {
   const available = state?.available;
 
   const apply = useCallback(async (nn = n, qq = q) => {
-    setBusy("rebuild"); setError(null); setAttackRes(null);
+    setBusy("rebuild"); setError(null); setResults({});
     try {
       const r = await api.networkNew({ n: Number(nn), q: Number(qq) });
       cachedSessionId = r.result.state.session_id;
       setState(r.result.state);
-      setTicked([]); setStolenPeriod(null);
+      setPeriodSel("all"); setStolenPeriod(null);
       setKeyword(r.result.state.dictionary[0]);
       setQuery(r.result.state.dictionary[0]);
       onTrace?.(r.trace, "Network");
@@ -190,12 +263,22 @@ export default function NetworkTab({ onTrace }) {
       session_id: state.session_id, kind: attackKind, periods: ticked,
       stolen_period: attackKind === "stolen_key" ? stolenPeriod : null, control,
     }));
-    if (r) setAttackRes(r.result);
+    if (r) {
+      const stamped = { ...r.result, records_at_run: cloudRecords.length, ran_at: Date.now() };
+      setResults((prev) => ({ ...prev, [resultKey(attackKind, control)]: stamped }));
+    }
     return r;
   };
 
-  const tickable = (p) => attackKind === "public_key" || (stolenPeriod != null && p < stolenPeriod);
-  const toggleTick = (p) => setTicked((t) => (t.includes(p) ? t.filter((x) => x !== p) : [...t, p]));
+  // A stolen key only reaches periods EARLIER than the theft, so those are the
+  // only ones the dropdown offers for that attack.
+  const eligible = useMemo(() => periods
+    .map((p) => p.period)
+    .filter((i) => attackKind === "public_key" || (stolenPeriod != null && i < stolenPeriod)),
+  [periods, attackKind, stolenPeriod]);
+  const ticked = periodSel === "all" ? eligible
+    : eligible.includes(Number(periodSel)) ? [Number(periodSel)] : [];
+  const resultKey = (kind, ctrl) => (ctrl ? "control" : kind);
 
   // --- the scripted walkthrough (§4) ------------------------------------
   const runScript = async () => {
@@ -210,7 +293,7 @@ export default function NetworkTab({ onTrace }) {
     try {
       const fresh = await api.networkNew({ n: Number(n), q: Number(q) });
       let s = fresh.result.state;
-      setState(s); setAttackRes(null); setTicked([]);
+      setState(s); setResults({}); setPeriodSel("all");
       const sid = s.session_id;
       const add = async (kw, txt) => {
         setActiveEdge("doctor->cloud"); setPulse((p) => p + 1);
@@ -240,21 +323,24 @@ export default function NetworkTab({ onTrace }) {
         await add("epilepsy", "Patient E: EEG normal");
       });
       await step("4/6 — attacker, PUBLIC KEY ONLY, all periods", async () => {
-        setAttackKind("public_key"); setTicked([0, 1, 2]);
+        setAttackKind("public_key"); setPeriodSel("all");
         setActiveEdge("attack"); setPulse((p) => p + 1);
         const r = await api.networkAttack({ session_id: sid, kind: "public_key", periods: [0, 1, 2] });
-        setState(r.result.state); setAttackRes(r.result); onTrace?.(r.trace, "Network");
+        setState(r.result.state); onTrace?.(r.trace, "Network");
+        setResults((prev) => ({ ...prev, public_key: { ...r.result, records_at_run: 5 } }));
       });
       await step("5/6 — attacker steals the period-2 key, reaches back to 0 and 1", async () => {
-        setAttackKind("stolen_key"); setStolenPeriod(2); setTicked([0, 1]);
+        setAttackKind("stolen_key"); setStolenPeriod(2); setPeriodSel("all");
         setActiveEdge("attack"); setPulse((p) => p + 1);
         const r = await api.networkAttack({ session_id: sid, kind: "stolen_key", periods: [0, 1], stolen_period: 2 });
-        setState(r.result.state); setAttackRes(r.result); onTrace?.(r.trace, "Network");
+        setState(r.result.state); onTrace?.(r.trace, "Network");
+        setResults((prev) => ({ ...prev, stolen_key: { ...r.result, records_at_run: 5 } }));
       });
       await step("6/6 — negative control: a garbage key must recover nothing", async () => {
         setControl(true);
         const r = await api.networkAttack({ session_id: sid, kind: "public_key", periods: [0], control: true });
-        setState(r.result.state); setAttackRes(r.result); onTrace?.(r.trace, "Network");
+        setState(r.result.state); onTrace?.(r.trace, "Network");
+        setResults((prev) => ({ ...prev, control: { ...r.result, records_at_run: 5 } }));
         setControl(false);
       });
       setScript("done — the whole story, every value measured live");
@@ -402,14 +488,14 @@ export default function NetworkTab({ onTrace }) {
               <div className="space-y-3 text-xs">
                 <div className="flex gap-2 items-center">
                   {["public_key", "stolen_key"].map((k) => (
-                    <button key={k} onClick={() => { setAttackKind(k); setTicked([]); }}
+                    <button key={k} onClick={() => { setAttackKind(k); setPeriodSel("all"); }}
                       className={`px-2.5 py-1.5 rounded border text-xs ${attackKind === k
                         ? "border-signal-red text-signal-red bg-signal-red/10" : "border-ink-700 text-ink-400"}`}>
                       {k === "public_key" ? "Public-key only" : "Stolen key"}
                     </button>
                   ))}
                   {attackKind === "stolen_key" && (
-                    <select value={stolenPeriod ?? ""} onChange={(e) => { setStolenPeriod(Number(e.target.value)); setTicked([]); }}
+                    <select value={stolenPeriod ?? ""} onChange={(e) => { setStolenPeriod(Number(e.target.value)); setPeriodSel("all"); }}
                       className={input}>
                       <option value="">steal which period?</option>
                       {periods.map((p) => <option key={p.period} value={p.period}>steal sk_r|{p.period}</option>)}
@@ -417,21 +503,21 @@ export default function NetworkTab({ onTrace }) {
                   )}
                 </div>
                 <div>
-                  <div className="text-ink-400 mb-1">attack which periods?</div>
-                  <div className="flex gap-3 flex-wrap">
-                    {periods.map((p) => {
-                      const ok = tickable(p.period);
-                      return (
-                        <label key={p.period}
-                          title={ok ? "" : "can't reach forward — a stolen key only reaches earlier periods"}
-                          className={`flex items-center gap-1.5 ${ok ? "text-ink-300" : "text-ink-600 cursor-not-allowed"}`}>
-                          <input type="checkbox" disabled={!ok} checked={ticked.includes(p.period)}
-                            onChange={() => toggleTick(p.period)} />
-                          period {p.period}
-                        </label>
-                      );
-                    })}
-                  </div>
+                  <div className="text-ink-400 mb-1">attack which period?</div>
+                  <select value={periodSel} onChange={(e) => setPeriodSel(e.target.value)} className={input}>
+                    <option value="all">
+                      {eligible.length ? `all ${eligible.length} reachable period(s): ${eligible.join(", ")}` : "no reachable period"}
+                    </option>
+                    {eligible.map((i) => <option key={i} value={i}>period {i}</option>)}
+                  </select>
+                  {attackKind === "stolen_key" && stolenPeriod != null && (
+                    <div className="text-[11px] text-ink-500 mt-1">
+                      Only periods before {stolenPeriod} are listed — a stolen key reaches backward, never forward.
+                    </div>
+                  )}
+                  {attackKind === "stolen_key" && stolenPeriod == null && (
+                    <div className="text-[11px] text-amber-400 mt-1">Pick which period's key is stolen first.</div>
+                  )}
                 </div>
                 <label className="flex items-center gap-2 text-ink-300">
                   <input type="checkbox" checked={control} onChange={(e) => setControl(e.target.checked)} />
@@ -460,67 +546,10 @@ export default function NetworkTab({ onTrace }) {
             </div>
           </Card>
 
-          {attackRes && (
-            <Card title={`Attack result — ${attackRes.control ? "negative control (garbage key)"
-              : attackRes.kind === "public_key" ? "public key only" : `stolen sk_r|${attackRes.stolen_period}`}`}>
-              {attackRes.periods.map((p) => (
-                <div key={p.period} className="mb-4 last:mb-0">
-                  <div className="flex items-center gap-2 flex-wrap mb-2">
-                    <Badge tone={p.outcome === "recovered" ? "red" : p.outcome === "unmeasured (timeout)" ? "neutral" : "green"}>
-                      period {p.period}: {p.outcome} {p.recovered != null && `${p.recovered}/${p.total}`}
-                    </Badge>
-                    {p.forward_security_break && <Badge tone="amber">★ genuine forward-security break</Badge>}
-                    {p.basis_gs != null && (
-                      <span className="text-[11px] text-ink-500 mono">
-                        attack basis GS {p.basis_gs.toFixed(2)} vs honest {p.honest_gs?.toFixed(2)}
-                      </span>
-                    )}
-                  </div>
-                  {p.comparison_note && (
-                    <div className={`text-[11px] mb-2 ${p.forward_security_break ? "text-amber-400" : "text-ink-400"}`}>
-                      {p.forward_security_break ? "★ " : "↳ "}{p.comparison_note}
-                    </div>
-                  )}
-                  {p.error && <div className="text-[11px] text-signal-red mono">{p.error}</div>}
-                  {p.rows?.length > 0 && (
-                    <table className="w-full mono text-[11px]">
-                      <thead><tr className="text-left text-ink-500">
-                        <th className="pb-1 pr-3">record</th><th className="pb-1 pr-3">recovered disease</th>
-                        <th className="pb-1 pr-3">true disease</th><th className="pb-1 pr-3">ciphertext</th>
-                        <th className="pb-1">plaintext</th>
-                      </tr></thead>
-                      <tbody>
-                        {p.rows.map((r) => (
-                          <tr key={r.record_id} className="border-t border-ink-800">
-                            <td className="py-1 pr-3 text-ink-400">#{r.record_id}</td>
-                            <td className={`py-1 pr-3 ${r.correct ? "text-signal-red" : "text-ink-500"}`}>
-                              {r.recovered?.length ? r.recovered.join(", ") : "—"}
-                            </td>
-                            <td className="py-1 pr-3 text-ink-300">{r.true_disease}</td>
-                            <td className="py-1 pr-3 text-ink-500">{r.ciphertext_fetched}</td>
-                            <td className="py-1">
-                              {r.level3 ? <span className="text-signal-red">“{r.plaintext}”</span>
-                                : r.correct ? <span className="text-ink-500">keyword ✓ / plaintext ✗ (decode bound)</span>
-                                  : <span className="text-ink-600">—</span>}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                  {p.h2_collisions?.length > 0 && (
-                    <div className="text-[11px] text-amber-400 mt-1">
-                      Dictionary words sharing an H2 tag ({p.h2_collisions.map((c) => c.join("/")).join("; ")}) cannot be
-                      told apart by any searcher, honest or not.
-                    </div>
-                  )}
-                </div>
-              ))}
-              <div className="text-sm text-ink-200 leading-relaxed border-t border-ink-800 pt-3">
-                {attackRes.conclusion}
-              </div>
-            </Card>
-          )}
+          {ORDER.filter((k) => results[k]).map((k) => (
+            <AttackResult key={k} res={results[k]} stale={results[k].records_at_run !== cloudRecords.length} />
+          ))}
+
         </>
       )}
     </div>
