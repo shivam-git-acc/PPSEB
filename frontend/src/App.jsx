@@ -12,6 +12,7 @@ import SecurityBoundaryTab from "./tabs/SecurityBoundaryTab";
 import PublicKeyBreakTab from "./tabs/PublicKeyBreakTab";
 import NetworkTab from "./tabs/NetworkTab";
 import RecoveryTab from "./tabs/RecoveryTab";
+import LedgerTab from "./tabs/LedgerTab";
 
 /* Grouped so the nav reads as a story rather than ten equal buttons:
    how it works -> what is broken -> how far it goes. */
@@ -26,6 +27,7 @@ const GROUPS = [
     { id: "kga", label: "KGA" },
     { id: "forward", label: "Forward Security" },
     { id: "pkbreak", label: "Public-Key Break" },
+    { id: "ledger", label: "Ledger Attacks" },
   ] },
   { name: "Measurement", tabs: [
     { id: "recovery", label: "Recovery" },
@@ -100,7 +102,7 @@ export default function App() {
           />
         </div>
 
-        <nav className="mx-auto w-full max-w-[1400px] flex items-stretch gap-1 px-5 overflow-x-auto" aria-label="Sections">
+        <nav className="w-full flex items-stretch gap-0.5 px-5 overflow-x-auto" aria-label="Sections">
           {GROUPS.map((g, gi) => (
             <div key={g.name} className="flex items-stretch">
               {gi > 0 && <span className="self-center mx-2 h-4 w-px bg-ink-800" aria-hidden />}
@@ -111,7 +113,7 @@ export default function App() {
                 const on = tab === t.id;
                 return (
                   <button key={t.id} onClick={() => go(t.id)} aria-current={on ? "page" : undefined}
-                    className={`relative px-3 py-2.5 text-[13px] whitespace-nowrap transition-colors ${
+                    className={`relative px-2.5 py-2.5 text-[13px] whitespace-nowrap transition-colors ${
                       on ? "text-ink-100" : "text-ink-400 hover:text-ink-200"}`}>
                     {t.label}
                     <span className={`absolute left-2.5 right-2.5 -bottom-px h-0.5 rounded-full transition-opacity ${
@@ -136,6 +138,7 @@ export default function App() {
           {tab === "pkbreak" && <PublicKeyBreakTab {...tabProps} />}
           {tab === "network" && <NetworkTab {...tabProps} />}
           {tab === "recovery" && <RecoveryTab {...tabProps} />}
+          {tab === "ledger" && <LedgerTab {...tabProps} />}
         </div>
       </main>
     </div>

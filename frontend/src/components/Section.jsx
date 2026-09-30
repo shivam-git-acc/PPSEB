@@ -42,7 +42,7 @@ export function Value({ tone = "neutral", children, className = "" }) {
 export function PrimaryButton({ children, ...props }) {
   return (
     <button {...props}
-      className="text-[13px] font-medium rounded-lg px-4 py-2 bg-accent hover:bg-accent-soft
+      className="text-[13px] font-medium rounded-lg px-4 py-2 whitespace-nowrap bg-accent hover:bg-accent-soft
                  text-ink-975 ring-1 ring-inset ring-white/15
                  disabled:opacity-35 disabled:cursor-not-allowed transition-colors">
       {children}
@@ -53,7 +53,7 @@ export function PrimaryButton({ children, ...props }) {
 export function SecondaryButton({ children, ...props }) {
   return (
     <button {...props}
-      className="text-[13px] font-medium rounded-lg px-3.5 py-2 bg-white/[0.04] ring-1 ring-inset ring-ink-700
+      className="text-[13px] font-medium rounded-lg px-3.5 py-2 whitespace-nowrap bg-white/[0.04] ring-1 ring-inset ring-ink-700
                  hover:bg-white/[0.08] hover:ring-ink-600 text-ink-200
                  disabled:opacity-35 disabled:cursor-not-allowed transition-colors">
       {children}

@@ -37,6 +37,7 @@ import sweep
 from attacks import nq_sweep
 from attacks import boundary
 from attacks import recovery
+from attacks import ledger
 import network as network_sim
 from attacks import security_estimate
 from attacks import pk_demo
@@ -799,6 +800,34 @@ async def api_recovery_status(job_id: str):
 @app.get("/api/recovery/jobs")
 async def api_recovery_jobs():
     return {"result": recovery.list_jobs()}
+
+
+
+# --------------------------------------------------------------------------
+# PATCH 21 — ledger-metadata attacks: replay, access-pattern leakage, plant
+# --------------------------------------------------------------------------
+
+class LedgerRequest(BaseModel):
+    n: int = Field(4, ge=2, le=16)
+    q: int = Field(257, ge=17)
+    seed: int = 2100
+    records: int = Field(ledger.DEFAULT_RECORDS, ge=4, le=60)
+    queries: int = Field(ledger.DEFAULT_QUERIES, ge=10, le=4000)
+    plants: int = Field(2, ge=1, le=8)
+
+
+@app.post("/api/ledger/run")
+async def api_ledger_run(req: LedgerRequest):
+    """`async def` for the same cysignals/main-thread reason as the other
+    lattice endpoints. Takes ~1 min at the default size."""
+    try:
+        result = ledger.run_ledger_attacks(
+            n=req.n, q=req.q, seed=req.seed, records=req.records,
+            queries=req.queries, plants=req.plants)
+    except RuntimeError as e:
+        raise HTTPException(400, str(e))
+    params = Params(n=req.n, q=req.q, sigma=SESSION.params.sigma, l=SESSION.params.l, m=0)
+    return envelope(result, [], params)
 
 
 

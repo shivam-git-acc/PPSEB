@@ -332,3 +332,54 @@ suppresses — so the retry is done explicitly.)
 The Network tab's per-period rows now lead with recovery rate, mean ‖Trap‖ and
 mean margin, with the basis GS norm moved into a details expander labelled as a
 bound that does not predict recovery.
+
+### Ledger Attacks tab
+
+Three findings that need no crypto break and no secret. They exploit the
+paper's own central design choice — public on-chain search — plus two checks it
+never specifies: nothing authenticates who submits a trapdoor or fetches a
+record, and nothing checks that a stored ciphertext is well formed. All are
+**parameter-independent**: they hold even if the lattice were secure. The
+preconditions are asserted by `test_flow_matches_the_paper`, so if
+authentication were ever added to this implementation the tests fail loudly
+rather than the findings quietly becoming wrong.
+
+**A · Replay** (confidentiality). A trapdoor is a public transaction. Re-submit
+it and the same Verify returns the same sequence number, and the cloud hands
+over the record, because nothing asks who is asking. Measured: identical result
+to the doctor's; a random vector in place of a captured trapdoor matches
+nothing. Replay yields the record's **identity and ciphertext, not plaintext** —
+decryption still needs a key.
+
+**B · Access-pattern leakage** (confidentiality), in two halves that behave very
+differently:
+
+| | needs a prior? | measured |
+|---|---|---|
+| Tier 1 — recover *which records share a disease* | no | **100% pure groups, every run, down to 10 queries** |
+| Tier 2 — name *which disease* | yes (public prevalence) | 0.40–0.95, mean 0.725 vs ~0.18 chance, 6/6 seeds |
+
+Tier 1 groups records by co-access: records answering exactly the same
+transactions carry the same keyword. That is exact and needs nothing but the
+ledger. Tier 2 then matches those groups against a public prevalence table —
+and is brittle, because the match is positional: one adjacent swap near the top
+shifts every group after it. At 16 records / 200 queries it can collapse to
+exactly 0.000. Off-distribution (the attacker's prior is wrong) it falls to
+~0.067. Accuracy is always reported beside a random baseline drawn from the
+same label distribution, and the UI shows the measured range so a single run
+cannot be read as the headline. `tier2_label` takes only the ledger, the public
+prevalence table and the record ids — there is no parameter through which the
+ground-truth map could arrive.
+
+**C · Universal-ciphertext plant** (integrity / DoS). `CT₂ = 0` makes
+`y = CT₁` for *any* trapdoor, so `CT₁ = ⌊q/2⌋·1` sits exactly on the decision
+point and matches everything. Measured: the planted entry matched **200/200**
+arbitrary trapdoors and every real search, while a random ciphertext matched
+**0/200** — the control is what rules out a merely permissive Verify. It
+reveals no keyword, so it is classified integrity, not confidentiality.
+Authenticated writes mitigate it only while no patient is compromised;
+verifying well-formedness mitigates it even then.
+
+The framing: classical PEKS leaks the access pattern to one private server.
+Putting verification on a public chain broadcasts it to everyone — the paper's
+contribution is what makes this leakage public.
