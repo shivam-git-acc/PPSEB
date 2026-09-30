@@ -99,6 +99,32 @@ def test_margin_separates(run):
     assert sum(1 for a in attempts if a["margin"] <= 0) > 0, "need both sides to claim separation"
 
 
+def test_margin_bins_never_draw_a_failure_right_of_zero():
+    """A margin of exactly 0 is a FAILURE (Verify needs the worst coordinate
+    strictly inside q/4), so it must never be binned on the passing side.
+
+    numpy's default half-open [lo, hi) bins put zeros in the bin STARTING at 0,
+    which is drawn at its centre -- a green "failed" bar to the right of the
+    margin = 0 line, contradicting on screen the claim the plot is making.
+    """
+    synth = [{"margin": m, "recovered": m > 0, "target_match": m > 0, "false_accept": False}
+             for m in (-10.0, -5.0, 0.0, 0.0, 0.0, 2.0, 7.0, 12.0)]
+    h = rc.margin_histograms(synth, bins=6)
+    assert h["zero_margin"] == 3
+    assert not [b for b in h["bins"] if b["failed"] and b["lo"] >= 0], h["bins"]
+    assert not [b for b in h["bins"] if b["recovered"] and b["hi"] <= 0], h["bins"]
+    assert 0.0 in [b["lo"] for b in h["bins"]] or 0.0 in [b["hi"] for b in h["bins"]], \
+        "0 must be a bin EDGE, or a bar straddles the decision boundary"
+    assert sum(b["recovered"] + b["failed"] for b in h["bins"]) == len(synth)
+
+
+def test_margin_bins_on_the_real_run(run):
+    """The same invariant on measured data, not just constructed data."""
+    h = run["plot2_margin_histograms"]
+    assert not [b for b in h["bins"] if b["failed"] and b["lo"] >= 0], h["bins"]
+    assert isinstance(h["zero_margin"], int)
+
+
 def test_trapnorm_predicts_better_than_gs(run):
     """The realized trapdoor norm out-predicts the basis bound on the same
     attempts -- which is the whole point of changing what gets displayed."""

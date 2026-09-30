@@ -191,20 +191,42 @@ def rate_curve(attempts: list[dict], key: str, k: int = 8) -> list[dict]:
 
 def margin_histograms(attempts: list[dict], bins: int = 24) -> dict:
     """Plot 2: the margin distribution for recovered vs failed attempts. The
-    mechanistic claim is that they separate at margin = 0."""
+    mechanistic claim is that they separate at margin = 0.
+
+    The bins are anchored so that 0 is an EDGE and each bin is left-open,
+    right-closed -- `edges[i-1] < v <= edges[i]`. Both details matter, because
+    Verify accepts only when the worst coordinate is STRICTLY inside q/4, so a
+    margin of exactly 0 is a FAILURE. numpy's default half-open [lo, hi) bins
+    put those zeros in the bin starting at 0, which is drawn at its centre --
+    i.e. a green "failed" bar appearing to the RIGHT of the margin = 0 line,
+    contradicting on screen the very claim the plot exists to support. Zeros
+    now land in the bin ending at 0, on the failing side of the line where
+    they belong, and `zero_margin` reports how many there were.
+    """
     ok = [a for a in attempts if a.get("margin") is not None]
     if not ok:
         return {"bins": [], "recovered": [], "failed": []}
-    lo, hi = min(a["margin"] for a in ok), max(a["margin"] for a in ok)
-    if lo == hi:
-        lo, hi = lo - 1, hi + 1
-    edges = np.linspace(lo, hi, bins + 1)
-    rec = np.histogram([a["margin"] for a in ok if a["recovered"]], bins=edges)[0]
-    bad = np.histogram([a["margin"] for a in ok if not a["recovered"]], bins=edges)[0]
+    values = np.array([a["margin"] for a in ok], dtype=float)
+    flags = np.array([bool(a["recovered"]) for a in ok])
+    lo, hi = float(values.min()), float(values.max())
+    step = max((hi - lo) / bins, 1e-9)
+    n_neg = int(math.ceil(max(-lo, 0.0) / step))
+    n_pos = int(math.ceil(max(hi, 0.0) / step))
+    edges = np.array([(-n_neg + j) * step for j in range(n_neg + n_pos + 1)])
+    if edges.size < 2:
+        edges = np.array([-step, 0.0, step])
+    # right=True => edges[i-1] < v <= edges[i], so v == 0 joins the bin below.
+    idx = np.digitize(values, edges, right=True)
+    idx = np.clip(idx, 1, len(edges) - 1)
+    rows = []
+    for j in range(1, len(edges)):
+        inside = idx == j
+        rows.append({"lo": float(edges[j - 1]), "hi": float(edges[j]),
+                     "center": float((edges[j - 1] + edges[j]) / 2),
+                     "recovered": int(np.sum(inside & flags)),
+                     "failed": int(np.sum(inside & ~flags))})
     return {
-        "bins": [{"lo": float(edges[j]), "hi": float(edges[j + 1]),
-                  "center": float((edges[j] + edges[j + 1]) / 2),
-                  "recovered": int(rec[j]), "failed": int(bad[j])} for j in range(bins)],
+        "bins": rows,
         "crossing": 0.0,
         "recovered_all_positive": all(a["margin"] > 0 for a in ok if a["recovered"]),
         "failed_all_nonpositive": all(a["margin"] <= 0 for a in ok if not a["recovered"]),
@@ -215,6 +237,7 @@ def margin_histograms(attempts: list[dict], bins: int = 24) -> dict:
         # than being allowed to blur the separation.
         "target_match_matches_margin": all((a["margin"] > 0) == a["target_match"] for a in ok),
         "false_accepts": sum(1 for a in ok if a.get("false_accept")),
+        "zero_margin": sum(1 for a in ok if a["margin"] == 0),
         "n": len(ok),
     }
 

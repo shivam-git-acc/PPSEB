@@ -133,7 +133,15 @@ export default function RecoveryTab({ initialized, onTrace }) {
               {hist.false_accepts > 0 && (
                 <Badge tone="amber">{hist.false_accepts} false accept(s) — a decoy matched first</Badge>
               )}
+              {hist.zero_margin > 0 && (
+                <Badge tone="neutral">{hist.zero_margin} attempt(s) at margin exactly 0</Badge>
+              )}
             </div>
+            <p className="text-[11px] text-ink-500 mt-2 leading-relaxed">
+              Bins are anchored so 0 is an edge and each bar covers (lo, hi]. Verify accepts only
+              when the worst coordinate is <i>strictly</i> inside q/4, so a margin of exactly 0 is a
+              failure and is drawn to the left of the line with the other failures.
+            </p>
           </Card>
 
           <Card title="Plot 3 — the falsifier: recovery vs basis GS norm"
