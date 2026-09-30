@@ -26,12 +26,12 @@ const GROUPS = [
     { id: "spec", label: "Spec Defect" },
     { id: "kga", label: "KGA" },
     { id: "forward", label: "Forward Security" },
-    { id: "pkbreak", label: "Public-Key Break" },
-    { id: "ledger", label: "Ledger Attacks" },
+    { id: "pkbreak", label: "Public-Key" },
+    { id: "ledger", label: "Ledger" },
   ] },
   { name: "Measurement", tabs: [
     { id: "recovery", label: "Recovery" },
-    { id: "boundary", label: "Security Boundary" },
+    { id: "boundary", label: "Boundary" },
     { id: "sweep", label: "Batch Sweep" },
   ] },
 ];
@@ -102,7 +102,8 @@ export default function App() {
           />
         </div>
 
-        <nav className="w-full flex items-stretch gap-0.5 px-5 overflow-x-auto" aria-label="Sections">
+        <nav className="mx-auto w-full max-w-[1400px] flex items-stretch gap-0.5 px-6 overflow-x-auto"
+             aria-label="Sections">
           {GROUPS.map((g, gi) => (
             <div key={g.name} className="flex items-stretch">
               {gi > 0 && <span className="self-center mx-2 h-4 w-px bg-ink-800" aria-hidden />}
