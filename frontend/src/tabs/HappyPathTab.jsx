@@ -65,7 +65,7 @@ export default function HappyPathTab({ onTrace, initialized, maxPeriod }) {
           <PrimaryButton onClick={run} disabled={!initialized || loading}>
             {loading ? "Running…" : "Run happy path"}
           </PrimaryButton>
-          {!initialized && <span className="text-xs text-ink-500">Initialize params in the left rail first.</span>}
+          {!initialized && <span className="text-2xs text-ink-500">Set parameters in the header bar first.</span>}
         </div>
         <ErrorBanner message={error} />
       </Card>

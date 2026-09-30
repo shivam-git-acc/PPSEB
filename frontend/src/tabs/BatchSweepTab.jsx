@@ -357,7 +357,7 @@ export default function BatchSweepTab({ initialized }) {
         title="Batch Sweep"
         subtitle="Run the end-to-end attack across a grid of configurations unattended, checkpointed to disk, then read the heatmap and conclusion in the morning"
       >
-        <p className="text-sm text-ink-300 leading-relaxed">
+        <p className="text-[13px] text-ink-300 leading-relaxed max-w-3xl">
           Every cell is one full end-to-end run (frozen DBs, real search and decrypt) and is
           repeated with different seeds so a single lucky or unlucky match never decides a cell.
           A repeat counts toward a verdict <b>only</b> if its negative controls failed (garbage and
@@ -487,7 +487,7 @@ export default function BatchSweepTab({ initialized }) {
             <PrimaryButton onClick={start} disabled={!initialized || starting || !preflight?.runnable_units}>
               {starting ? "Starting…" : "Start batch (runs in the background)"}
             </PrimaryButton>
-            {!initialized && <span className="text-xs text-ink-500">Initialize params in the left rail first.</span>}
+            {!initialized && <span className="text-2xs text-ink-500">Set parameters in the header bar first.</span>}
           </div>
         </Card>
       )}
@@ -645,7 +645,7 @@ export default function BatchSweepTab({ initialized }) {
               </Card>
 
               <Card title={`Conclusion (trusted cells only, gate: ${results.gate})`}>
-                <p className="text-sm text-ink-200 leading-relaxed">{results.conclusion}</p>
+                <p className="text-[13px] text-ink-200 leading-relaxed max-w-4xl">{results.conclusion}</p>
                 <div className="flex gap-3 mt-4 flex-wrap text-xs">
                   {Object.entries(results.counts).map(([k, v]) => (
                     <div key={k} className="border border-ink-800 rounded px-2 py-1">
@@ -786,7 +786,7 @@ export default function BatchSweepTab({ initialized }) {
 
               <Card title="Per-cell detail">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm mono">
+                  <table className="w-full text-[13px] mono">
                     <thead>
                       <tr className="text-left text-ink-500 text-xs uppercase">
                         <th className="pb-2 pr-3">n</th>

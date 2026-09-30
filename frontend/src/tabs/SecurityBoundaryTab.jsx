@@ -295,7 +295,7 @@ export default function SecurityBoundaryTab({ initialized }) {
 
       {snap?.conclusion && (
         <Card title="Conclusion (measured outcome, estimated axis)">
-          <p className="text-sm text-ink-200 leading-relaxed">{snap.conclusion}</p>
+          <p className="text-[13px] text-ink-200 leading-relaxed max-w-4xl">{snap.conclusion}</p>
           <div className="text-xs text-amber-400 bg-amber-500/10 border border-amber-600/30 rounded px-3 py-2.5 mt-3 leading-relaxed">
             ⚠ The bit axis is an estimate from the root-Hermite fit, asymptotic and unreliable at these small
             dimensions — measured breaks happen at far smaller block sizes than it predicts. Never read a
@@ -307,7 +307,7 @@ export default function SecurityBoundaryTab({ initialized }) {
       {cells.length > 0 && (
         <Card title="Per-cell detail">
           <div className="overflow-x-auto">
-            <table className="w-full text-xs mono">
+            <table className="w-full text-2xs mono">
               <thead>
                 <tr className="text-left text-ink-500 uppercase">
                   <th className="pb-2 pr-3">n</th><th className="pb-2 pr-3">q</th><th className="pb-2 pr-3">m</th>

@@ -55,7 +55,7 @@ export default function SpecDefectTab({ onTrace, initialized }) {
       </Card>
 
       <Card title="Three-way justification for the fix">
-        <ul className="text-sm text-ink-300 space-y-2 list-disc pl-5">
+        <ul className="max-w-4xl text-[13px] text-ink-300 space-y-2 list-disc pl-5">
           <li><b className="text-ink-100">Input list:</b> Algorithm 2's own stated inputs are (j, pk_r{"{j-1}"}, sk_r{"{j-1}"}, params) — pk_rj and sk_rj aren't among them.</li>
           <li><b className="text-ink-100">Lemma 5 signature:</b> NewBasisDel(A, R, T_A, sigma) takes a SOURCE basis of an EXISTING lattice — it delegates FROM a basis you already have, never consumes its own output.</li>
           <li><b className="text-ink-100">Algorithm 4 analogy:</b> the paper's own Trapdoor algorithm calls NewBasisDel(pk_rj, beta, sk_rj, sigma) using the CURRENT, already-established pk_rj/sk_rj — confirming Algorithm 2's self-reference is a transcription error.</li>
@@ -76,7 +76,7 @@ export default function SpecDefectTab({ onTrace, initialized }) {
             {loading ? "Running…" : "Run corrected version"}
           </SecondaryButton>
         </div>
-        {!initialized && <div className="text-xs text-ink-500 mt-2">Initialize params in the left rail first.</div>}
+        {!initialized && <div className="text-2xs text-ink-500 mt-2">Set parameters in the header bar first.</div>}
         <ErrorBanner message={error} />
       </Card>
 

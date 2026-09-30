@@ -47,7 +47,7 @@ export default function ParamsBar({ params, setParams, onApply, applying, initia
       </div>
 
       {open && (
-        <div className="absolute z-40 mt-2 w-[26rem] panel shadow-pop enter p-4 space-y-3">
+        <div className="absolute right-0 z-40 mt-2 w-[22rem] max-w-[calc(100vw-2rem)] panel shadow-pop enter p-4 space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <Field label="n" hint="lattice dimension">
               <input type="number" className={inputCls} value={params.n}

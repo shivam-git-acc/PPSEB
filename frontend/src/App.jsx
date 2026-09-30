@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ParamsBar from "./components/ParamsBar";
 import { api } from "./api";
 
@@ -41,7 +41,21 @@ export default function App() {
   const [applying, setApplying] = useState(false);
   const [shapeTable, setShapeTable] = useState(null);
   const [maxPeriod, setMaxPeriod] = useState(0);
-  const [tab, setTab] = useState("overview");
+  // Hash routing: a tab is linkable, reload keeps your place, and the browser
+  // back button works.
+  const [tab, setTab] = useState(() => {
+    const h = window.location.hash.replace("#", "");
+    return ALL.some((t) => t.id === h) ? h : "overview";
+  });
+  useEffect(() => {
+    const onHash = () => {
+      const h = window.location.hash.replace("#", "");
+      if (ALL.some((t) => t.id === h)) setTab(h);
+    };
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+  const go = (id) => { window.location.hash = id; setTab(id); };
   const [initError, setInitError] = useState(null);
 
   const applyParams = async () => {
@@ -67,7 +81,7 @@ export default function App() {
   return (
     <div className="h-full flex flex-col overflow-hidden">
       <header className="shrink-0 border-b border-ink-800 bg-ink-950/60 backdrop-blur-xl">
-        <div className="flex items-center gap-5 px-5 h-14">
+        <div className="mx-auto w-full max-w-[1400px] flex items-center gap-5 px-6 h-13" style={{ height: 52 }}>
           <div className="flex items-center gap-2.5 shrink-0">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
               <rect x="2.5" y="2.5" width="19" height="19" rx="5" stroke="#6e8cff" strokeWidth="1.5" />
@@ -86,7 +100,7 @@ export default function App() {
           />
         </div>
 
-        <nav className="flex items-stretch gap-1 px-4 overflow-x-auto" aria-label="Sections">
+        <nav className="mx-auto w-full max-w-[1400px] flex items-stretch gap-1 px-5 overflow-x-auto" aria-label="Sections">
           {GROUPS.map((g, gi) => (
             <div key={g.name} className="flex items-stretch">
               {gi > 0 && <span className="self-center mx-2 h-4 w-px bg-ink-800" aria-hidden />}
@@ -96,7 +110,7 @@ export default function App() {
               {g.tabs.map((t) => {
                 const on = tab === t.id;
                 return (
-                  <button key={t.id} onClick={() => setTab(t.id)} aria-current={on ? "page" : undefined}
+                  <button key={t.id} onClick={() => go(t.id)} aria-current={on ? "page" : undefined}
                     className={`relative px-3 py-2.5 text-[13px] whitespace-nowrap transition-colors ${
                       on ? "text-ink-100" : "text-ink-400 hover:text-ink-200"}`}>
                     {t.label}
@@ -111,8 +125,8 @@ export default function App() {
       </header>
 
       <main className="flex-1 min-h-0 overflow-y-auto">
-        <div className="px-6 py-6 w-full">
-          {tab === "overview" && <OverviewTab goTo={setTab} />}
+        <div className="mx-auto w-full max-w-[1400px] px-6 py-6">
+          {tab === "overview" && <OverviewTab goTo={go} />}
           {tab === "happy" && <HappyPathTab {...tabProps} />}
           {tab === "kga" && <KgaTab {...tabProps} />}
           {tab === "forward" && <ForwardSecTab {...tabProps} />}

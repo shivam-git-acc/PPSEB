@@ -43,7 +43,7 @@ export function PrimaryButton({ children, ...props }) {
   return (
     <button {...props}
       className="text-[13px] font-medium rounded-lg px-4 py-2 bg-accent hover:bg-accent-soft
-                 text-ink-975 shadow-[0_1px_0_0_rgba(255,255,255,0.25)_inset]
+                 text-ink-975 ring-1 ring-inset ring-white/15
                  disabled:opacity-35 disabled:cursor-not-allowed transition-colors">
       {children}
     </button>

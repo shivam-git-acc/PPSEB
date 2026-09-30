@@ -58,7 +58,7 @@ export default function KgaTab({ onTrace, initialized, maxPeriod }) {
   return (
     <div className="space-y-4">
       <Card title="Keyword-Guessing Attack" subtitle="Attacker view: only pk_rj, one captured trapdoor, and a dictionary.">
-        <p className="text-sm text-ink-300 leading-relaxed">
+        <p className="text-[13px] text-ink-300 leading-relaxed max-w-3xl">
           PPSEB claims resistance to keyword-guessing attacks, even quantum ones. But PEKS.Encrypt
           and Verify are both PUBLIC algorithms — anyone can re-run them. Pick a secret keyword the
           "doctor" will search for; the attacker below sees nothing but the public key, one
@@ -79,7 +79,7 @@ export default function KgaTab({ onTrace, initialized, maxPeriod }) {
             Doctor makes trapdoor for "{secret}"
           </PrimaryButton>
         </div>
-        {!initialized && <div className="text-xs text-ink-500 mt-2">Initialize params in the left rail first.</div>}
+        {!initialized && <div className="text-2xs text-ink-500 mt-2">Set parameters in the header bar first.</div>}
       </Card>
 
       {trapdoorMade && (

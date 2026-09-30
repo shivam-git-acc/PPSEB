@@ -181,7 +181,7 @@ export default function ForwardSecTab({ onTrace, initialized, params }) {
   return (
     <div className="space-y-4">
       <Card title="Forward-Security Norm Experiment" subtitle="The H1 dilemma: the paper specifies no construction, and the two natural choices fail differently">
-        <p className="text-sm text-ink-300 leading-relaxed">
+        <p className="text-[13px] text-ink-300 leading-relaxed max-w-3xl">
           Stealing the CURRENT trapdoor sk_rJ must not reveal any EARLIER sk_ri. Consecutive
           periods are related by a public invertible R, so a candidate for any earlier basis is
           computable from public data alone plus the stolen sk_rJ — always. Every candidate is
@@ -408,7 +408,7 @@ export default function ForwardSecTab({ onTrace, initialized, params }) {
         {e2eMultiResult && (
           <Card title={`Dimension comparison — J=${e2eMultiResult.J}`} className="mt-4">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm mono">
+              <table className="w-full text-[13px] mono">
                 <thead>
                   <tr className="text-left text-ink-500 text-xs uppercase">
                     <th className="pb-2 pr-4">n</th>
@@ -445,7 +445,7 @@ export default function ForwardSecTab({ onTrace, initialized, params }) {
           </Card>
         )}
 
-        {!initialized && <div className="text-xs text-ink-500 mt-2">Initialize params in the left rail first.</div>}
+        {!initialized && <div className="text-2xs text-ink-500 mt-2">Set parameters in the header bar first.</div>}
       </Card>
 
       <Card title="Run experiment">
@@ -467,7 +467,7 @@ export default function ForwardSecTab({ onTrace, initialized, params }) {
             {loading ? "Running…" : "Run experiment"}
           </PrimaryButton>
         </div>
-        {!initialized && <div className="text-xs text-ink-500 mt-2">Initialize params in the left rail first.</div>}
+        {!initialized && <div className="text-2xs text-ink-500 mt-2">Set parameters in the header bar first.</div>}
         <ErrorBanner message={error} />
       </Card>
 
@@ -572,7 +572,7 @@ export default function ForwardSecTab({ onTrace, initialized, params }) {
           )}
 
           <Card title="Finding 2 — the H1 dilemma (both natural instantiations lose)">
-            <p className="text-sm text-ink-300 leading-relaxed">{result.conclusion}</p>
+            <p className="text-[13px] text-ink-300 leading-relaxed max-w-3xl">{result.conclusion}</p>
             <p className="text-xs text-ink-500 mt-2">
               The paper specifies no H1 construction; this dilemma is a consequence of that
               omission, and the security proof's silence on H1's distribution is load-bearing.
@@ -620,7 +620,7 @@ export default function ForwardSecTab({ onTrace, initialized, params }) {
             </ResponsiveContainer>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-sm mono">
+              <table className="w-full text-[13px] mono">
                 <thead>
                   <tr className="text-left text-ink-500 text-xs uppercase">
                     <th className="pb-2 pr-4">n</th>
@@ -703,7 +703,7 @@ export default function ForwardSecTab({ onTrace, initialized, params }) {
             )}
           </div>
         )}
-        {!initialized && <div className="text-xs text-ink-500 mt-2">Initialize params in the left rail first.</div>}
+        {!initialized && <div className="text-2xs text-ink-500 mt-2">Set parameters in the header bar first.</div>}
       </Card>
 
       <Card title="Fairness comparison: give the attacker BKZ too" subtitle="Closes the &quot;defender got BKZ, attacker only got LLL&quot; asymmetry — the last step to make a no-break result unimpeachable">
@@ -745,7 +745,7 @@ export default function ForwardSecTab({ onTrace, initialized, params }) {
             </ResponsiveContainer>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-sm mono">
+              <table className="w-full text-[13px] mono">
                 <thead>
                   <tr className="text-left text-ink-500 text-xs uppercase">
                     <th className="pb-2 pr-4">n</th>
@@ -799,7 +799,7 @@ export default function ForwardSecTab({ onTrace, initialized, params }) {
             ))}
           </div>
         )}
-        {!initialized && <div className="text-xs text-ink-500 mt-2">Initialize params in the left rail first.</div>}
+        {!initialized && <div className="text-2xs text-ink-500 mt-2">Set parameters in the header bar first.</div>}
       </Card>
     </div>
   );

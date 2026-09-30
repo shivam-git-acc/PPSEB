@@ -223,7 +223,7 @@ export default function RecoveryTab({ initialized, onTrace }) {
 
           <Card title="Per-cell detail">
             <div className="overflow-x-auto">
-              <table className="w-full text-xs mono">
+              <table className="w-full text-2xs mono">
                 <thead><tr className="text-left text-ink-500 uppercase">
                   <th className="pb-2 pr-3">attack</th><th className="pb-2 pr-3">rep</th>
                   <th className="pb-2 pr-3">period</th><th className="pb-2 pr-3">recovery rate</th>
@@ -256,7 +256,7 @@ export default function RecoveryTab({ initialized, onTrace }) {
           </Card>
 
           <Card title="Conclusion (every number from this run)">
-            <p className="text-sm text-ink-200 leading-relaxed">{res.statement}</p>
+            <p className="text-[13px] text-ink-200 leading-relaxed max-w-4xl">{res.statement}</p>
           </Card>
         </>
       )}

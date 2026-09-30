@@ -75,7 +75,7 @@ export default function PublicKeyBreakTab({ initialized }) {
           <PrimaryButton onClick={run} disabled={!initialized || loading}>
             {loading ? "Attacking (~35s)…" : "Attack with public key only"}
           </PrimaryButton>
-          {!initialized && <span className="text-xs text-ink-500">Initialize params in the left rail first.</span>}
+          {!initialized && <span className="text-2xs text-ink-500">Set parameters in the header bar first.</span>}
         </div>
         <ErrorBanner message={error} />
       </Card>
@@ -116,7 +116,7 @@ export default function PublicKeyBreakTab({ initialized }) {
               </Badge>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm mono">
+              <table className="w-full text-[13px] mono">
                 <thead>
                   <tr className="text-left text-ink-500 text-xs uppercase">
                     <th className="pb-2 pr-4">record</th>
@@ -156,7 +156,7 @@ export default function PublicKeyBreakTab({ initialized }) {
           <Card title="Full record plaintext (a separate, stronger claim)"
             subtitle="Attacker's public-key basis vs the doctor's true secret key, on the same records">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm mono">
+              <table className="w-full text-[13px] mono">
                 <thead>
                   <tr className="text-left text-ink-500 text-xs uppercase">
                     <th className="pb-2 pr-4">record</th>
@@ -201,7 +201,7 @@ export default function PublicKeyBreakTab({ initialized }) {
           </Card>
 
           <Card title="Conclusion">
-            <p className="text-sm text-ink-200 leading-relaxed">{res.conclusion}</p>
+            <p className="text-[13px] text-ink-200 leading-relaxed max-w-4xl">{res.conclusion}</p>
             <div className="text-xs text-amber-400 bg-amber-500/10 border border-amber-600/30 rounded px-3 py-2.5 mt-3 leading-relaxed">
               ⚠ Demonstrated at n={res.n}, q={res.q}{res.paper_params ? " — the paper's own parameters" : ""}, where the
               attack is LLL-level (BKZ β={res.beta}). At larger parameters its cost grows; see the Security Boundary tab
