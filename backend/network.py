@@ -51,6 +51,7 @@ from ppseb.hashes import H1, H1_inverse
 from ppseb.linalg import (gram_schmidt_norm, kernel_basis_mod_q, mat_mod_mixed, strong_reduce)
 from ppseb.params import Params, default_params, derived_m
 from ppseb.samplers import new_basis_del
+from attacks.recovery import decode_margin
 from ppseb.scheme import decrypt_record, encrypt_record, peks_encrypt, trapdoor, verify
 from ppseb.trapgen import trapgen
 from ppseb.trace import Trace
@@ -372,15 +373,32 @@ class NetworkSession:
                 per_disease[disease] = {"error": f"{type(e).__name__}: {e}", "matched": []}
                 continue
             hit = [n_id for (n_id, c1, c2) in view.CT if verify(c1, c2, trap, self.params)[0]]
-            per_disease[disease] = {"matched": hit}
+            # PATCH 19: the variables that DECIDE Verify, recorded from the
+            # trapdoors we are already building. The margin is meaningful only
+            # against the record this disease should match, so it is taken
+            # there -- one measurement per record, from that record's own
+            # keyword trapdoor.
+            trap_norm = float(np.linalg.norm(trap.astype(float)))
+            margins = {}
+            for rec in self.periods[i].records:
+                if rec.keyword == disease:
+                    ct = next((c1, c2) for (n_id, c1, c2) in view.CT if n_id == rec.record_id)
+                    margins[rec.record_id] = decode_margin(ct[0], ct[1], trap, self.params)
+            per_disease[disease] = {"matched": hit, "trap_norm": trap_norm, "margins": margins}
             for n_id in hit:
                 matches[n_id].append(disease)
             if trace is not None:
                 trace.compute(f"Trapdoor for {disease!r} at period {i}",
                               detail=f"Matched record(s) {hit}" if hit else "Matched nothing.",
                               data={"disease": disease, "matched": hit}, algo="Network")
+        norms = [d["trap_norm"] for d in per_disease.values() if "trap_norm" in d]
+        margins = [m for d in per_disease.values() for m in d.get("margins", {}).values()]
         return {"per_record": matches, "per_disease": per_disease, "timed_out": timed_out,
-                "runtime_s": time.time() - started}
+                "runtime_s": time.time() - started,
+                "mean_trap_norm": float(np.mean(norms)) if norms else None,
+                "mean_margin": float(np.mean(margins)) if margins else None,
+                "min_margin": float(min(margins)) if margins else None,
+                "margins": margins}
 
     def _score_period(self, i: int, labels: dict, basis: np.ndarray) -> dict:
         """Score the labels against the truth, then attempt Level 3 -- reported
@@ -498,6 +516,12 @@ class NetworkSession:
         labels = self._label_period(i, basis, budget_s, trace)
         scored = self._score_period(i, labels, basis)
         row.update(scored)
+        # PATCH 19 §6: the displayed variables are the ones that decide the
+        # outcome. basis_gs stays in the payload, behind a "distributional
+        # bound" label, precisely because it does NOT predict recovery.
+        row["recovery_rate"] = (scored["recovered"] / scored["total"]) if scored["total"] else None
+        for k in ("mean_trap_norm", "mean_margin", "min_margin"):
+            row[k] = labels.get(k)
         row["timed_out"] = labels["timed_out"]
         row["outcome"] = (OUTCOME_TIMEOUT if labels["timed_out"] and not scored["recovered"]
                           else OUTCOME_RECOVERED if scored["recovered"] else OUTCOME_FAILED)

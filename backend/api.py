@@ -36,6 +36,7 @@ from attacks.spec_defect import run_paper_version, run_corrected_version
 import sweep
 from attacks import nq_sweep
 from attacks import boundary
+from attacks import recovery
 import network as network_sim
 from attacks import security_estimate
 from attacks import pk_demo
@@ -756,6 +757,48 @@ async def api_network_attack(req: NetworkAttackRequest):
         raise HTTPException(400, str(e))
     return _network_envelope(session, {k: v for k, v in result.items() if k != "trace"},
                              result["trace"])
+
+
+
+# --------------------------------------------------------------------------
+# PATCH 19 — recovery analysis: what actually decides break vs no-break
+# --------------------------------------------------------------------------
+
+class RecoveryRequest(BaseModel):
+    n: int = Field(4, ge=2, le=16)
+    q: int = Field(257, ge=17)
+    J: int = Field(recovery.DEFAULT_J, ge=1, le=4)
+    records_per_period: int = Field(recovery.RECORDS_PER_PERIOD, ge=2, le=60)
+    samples: int = Field(recovery.SAMPLES, ge=2, le=400)
+    repeats: int = Field(recovery.REPEATS, ge=1, le=10)
+    seed: int = recovery.DEFAULT_SEED
+    beta: int = Field(recovery.DEMO_BETA, ge=2, le=40)
+    sigma_scales: list[float] = Field(default_factory=lambda: list(recovery.SIGMA_SCALES))
+
+
+@app.post("/api/recovery/start")
+async def api_recovery_start(req: RecoveryRequest):
+    """A full-size run is thousands of SamplePre draws, so it runs as a job the
+    UI polls rather than a request that hangs."""
+    job_id = recovery.start_job(
+        n=req.n, q=req.q, J=req.J, records_per_period=req.records_per_period,
+        samples=req.samples, repeats=req.repeats, seed=req.seed, beta=req.beta,
+        sigma_scales=tuple(req.sigma_scales),
+    )
+    return {"result": {"job_id": job_id}}
+
+
+@app.get("/api/recovery/status")
+async def api_recovery_status(job_id: str):
+    snap = recovery.job_snapshot(job_id)
+    if snap is None:
+        raise HTTPException(404, f"no such recovery job: {job_id}")
+    return {"result": snap}
+
+
+@app.get("/api/recovery/jobs")
+async def api_recovery_jobs():
+    return {"result": recovery.list_jobs()}
 
 
 

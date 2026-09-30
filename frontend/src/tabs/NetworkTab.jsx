@@ -117,11 +117,24 @@ function AttackResult({ res, stale }) {
               period {p.period}: {p.outcome} {p.recovered != null && `${p.recovered}/${p.total}`}
             </Badge>
             {p.forward_security_break && <Badge tone="amber">★ genuine forward-security break</Badge>}
-            {p.basis_gs != null && (
-              <span className="text-[11px] text-ink-500 mono">
-                attack basis GS {p.basis_gs.toFixed(2)}
-                {p.honest_gs != null && ` vs honest ${p.honest_gs.toFixed(2)}`}
+            {p.recovery_rate != null && (
+              <span className="text-[11px] text-ink-300 mono">
+                recovery {(p.recovery_rate * 100).toFixed(0)}%
+                {p.mean_trap_norm != null && ` · mean ‖Trap‖ ${p.mean_trap_norm.toFixed(0)}`}
+                {p.mean_margin != null && ` · mean margin ${p.mean_margin > 0 ? "+" : ""}${p.mean_margin.toFixed(0)}`}
               </span>
+            )}
+            {p.basis_gs != null && (
+              <details className="text-[11px] text-ink-600">
+                <summary className="cursor-pointer">basis GS</summary>
+                <span className="mono">
+                  {p.basis_gs.toFixed(2)}{p.honest_gs != null && ` vs honest ${p.honest_gs.toFixed(2)}`}
+                </span>
+                <span className="block text-ink-600 max-w-xs leading-relaxed mt-1">
+                  A distributional bound on what SamplePre produces — it does not predict recovery.
+                  See the Recovery Analysis tab.
+                </span>
+              </details>
             )}
           </div>
           {p.comparison_note && (

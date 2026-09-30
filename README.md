@@ -281,3 +281,54 @@ Note on reuse: PATCH 18 describes the stolen-key backward attack as new. It
 already existed here (`attacks/end_to_end.py`, and on the boundary axis in
 `attacks/boundary.py`), so this tab calls that tested code rather than keeping
 a second copy of the R-product transform.
+
+### Recovery Analysis tab
+
+The per-attack displays used to report the attack basis's Gram-Schmidt norm,
+and it does not predict recovery: in one measured run a basis at GS 6.24
+recovered every time while one at GS 5.29 recovered a quarter of the time. The
+GS norm is a *distributional bound* on what SamplePre will produce. Verify
+consumes one *realized* trapdoor, and accepts exactly when every coordinate of
+`CT₁ − Trapᵀ·CT₂` lands within q/4 of q/2.
+
+So every attempt now records the variables that decide the outcome:
+
+| variable | what it is |
+|---|---|
+| `trap_norm` | ‖Trap‖ of the realized sampled vector — what Verify actually consumes |
+| `decode_margin` | `q/4 − max_i dist(y_i, q/2)`; positive exactly when Verify accepts |
+| `basis_gs` | the old proxy, kept to show it does **not** predict recovery |
+| `recovered` | unchanged: the search returned the doctor's own N₀ on the frozen DB |
+
+`decode_margin` mirrors `scheme.verify` exactly, wrap-around distance included,
+and `margin > 0 ⟺ verify() accepts` is asserted rather than assumed
+(`test_margin_agrees_with_verify`). The one way `recovered` can differ from a
+positive margin is a decoy matching first — a false accept — which is counted
+and reported separately rather than allowed to blur the separation.
+
+Sampling noise is removed rather than argued away: many records per period,
+many trapdoor draws per basis, and several independent rebuilds, so a period
+reports a recovery **rate** instead of one coin flip. The tab shows four plots
+— recovery vs ‖Trap‖, the margin histograms for recovered vs failed, the
+falsifier (recovery vs basis GS), and a σ-sweep that holds the basis fixed and
+widens only the attacker's sampling width, walking the rate down from 1 to 0.
+
+Measured at n=4, q=257 over 1800 attempts (30 records × 50 samples × 3
+repeats): a positive margin and Verify accepting coincide on **all 1800**, with
+zero false accepts; recovery correlates with ‖Trap‖ at r=+0.74 and with the
+decode margin at r=+0.87, but with the basis GS norm at **r=−0.19** — the old
+variable points the wrong way. The σ-sweep falls monotonically from 1.00
+(‖Trap‖ 77, margin +49) to 0.07 (‖Trap‖ 773, margin −41). The σ-sweep varies
+the *attacker's own* sampling width: it demonstrates that recovery follows the
+margin, and is not a claim that the scheme weakens, since a real attacker would
+pick the smallest σ that works.
+
+A build where the honest doctor's own search fails leaves no baseline to judge
+an attacker against, so it is rebuilt with a fresh seed; if it still fails the
+repeat is **skipped and reported**, and the auto-statement quotes the repeats
+actually *measured*, never the number configured. (`build_frozen_history`'s own
+retry cannot help here — it hangs off an assertion that `honest_checks=True`
+suppresses — so the retry is done explicitly.)
+The Network tab's per-period rows now lead with recovery rate, mean ‖Trap‖ and
+mean margin, with the basis GS norm moved into a details expander labelled as a
+bound that does not predict recovery.
