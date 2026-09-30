@@ -31,7 +31,7 @@ function ArchDiagram() {
 
 export default function OverviewTab({ goTo }) {
   return (
-    <div className="space-y-5 max-w-4xl">
+    <div className="space-y-4">
       <Card title="What PPSEB claims">
         <p className="text-sm text-ink-300 leading-relaxed">
           PPSEB (Xu et al., 2022) is a lattice-based (LWE) searchable-encryption scheme for

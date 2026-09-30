@@ -1,183 +1,132 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
-import { Card, Badge, PrimaryButton, SecondaryButton, ErrorBanner } from "../components/Section";
-
-const NODES = {
-  doctor: { x: 40, y: 30, w: 150, h: 54, label: "DOCTOR", sub: "holds sk_r|j" },
-  cloud: { x: 285, y: 30, w: 150, h: 54, label: "CLOUD", sub: "stores blobs" },
-  verifier: { x: 530, y: 30, w: 150, h: 54, label: "VERIFIER", sub: "public Verify" },
-  attacker: { x: 285, y: 160, w: 150, h: 54, label: "ATTACKER", sub: "no sk (or one)" },
-};
-const EDGES = {
-  "doctor->cloud": ["doctor", "cloud"],
-  "cloud->doctor": ["cloud", "doctor"],
-  "doctor->verifier->doctor": ["doctor", "verifier"],
-  "cloud->verifier": ["cloud", "verifier"],
-  "attacker->cloud": ["attacker", "cloud"],
-  attack: ["attacker", "cloud"],
-  doctor: ["doctor", "doctor"],
-};
-
-function centre(id) {
-  const n = NODES[id];
-  return { cx: n.x + n.w / 2, cy: n.y + n.h / 2 };
-}
-
-function NetworkDiagram({ activeEdge, pulse, periodLabel, cloudCount, attackerHolds }) {
-  const [from, to] = EDGES[activeEdge] ?? [];
-  const a = from && centre(from);
-  const b = to && centre(to);
-  const moving = a && b && from !== to;
-  return (
-    <svg viewBox="0 0 720 240" className="w-full" style={{ maxHeight: 260 }}>
-      <defs>
-        <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-          <path d="M0,0 L8,4 L0,8 z" fill="#4b4b55" />
-        </marker>
-      </defs>
-      {[["doctor", "cloud"], ["cloud", "verifier"]].map(([f, t]) => {
-        const p = centre(f); const r = centre(t);
-        return <line key={`${f}${t}`} x1={p.cx + 75} y1={p.cy} x2={r.cx - 78} y2={r.cy}
-          stroke="#2a2a30" strokeWidth="2" markerEnd="url(#arrow)" />;
-      })}
-      <line x1={centre("attacker").cx} y1={centre("attacker").cy - 27}
-        x2={centre("cloud").cx} y2={centre("cloud").cy + 27}
-        stroke="#3a2a2a" strokeWidth="2" strokeDasharray="5 4" />
-      <line x1={centre("attacker").cx + 75} y1={centre("attacker").cy}
-        x2={centre("verifier").cx} y2={centre("verifier").cy + 27}
-        stroke="#3a2a2a" strokeWidth="2" strokeDasharray="5 4" />
-      <text x={centre("attacker").cx + 90} y={centre("attacker").cy - 34} fill="#6b6b76" fontSize="10">
-        taps public data
-      </text>
-
-      {Object.entries(NODES).map(([id, n]) => {
-        const activeNode = from === id || to === id;
-        return (
-          <g key={id}>
-            <rect x={n.x} y={n.y} width={n.w} height={n.h} rx="7"
-              fill={activeNode ? "#1d2430" : "#16161a"}
-              stroke={activeNode ? "#5b9dff" : id === "attacker" ? "#6b2426" : "#2a2a30"} strokeWidth="1.5" />
-            <text x={n.x + 12} y={n.y + 22} fill="#e5e5ea" fontSize="12" fontWeight="600">{n.label}</text>
-            <text x={n.x + 12} y={n.y + 40} fill="#8a8a94" fontSize="10">
-              {id === "doctor" ? periodLabel : id === "cloud" ? `${cloudCount} blob${cloudCount === 1 ? "" : "s"}`
-                : id === "attacker" ? attackerHolds : n.sub}
-            </text>
-          </g>
-        );
-      })}
-
-      {moving && (
-        <circle key={pulse} r="5" fill="#5b9dff">
-          <animate attributeName="cx" from={a.cx} to={b.cx} dur="0.9s" fill="freeze" />
-          <animate attributeName="cy" from={a.cy} to={b.cy} dur="0.9s" fill="freeze" />
-          <animate attributeName="opacity" from="1" to="0" dur="0.9s" fill="freeze" />
-        </circle>
-      )}
-    </svg>
-  );
-}
-
-function Node({ title, tone = "ink", children, footer }) {
-  const border = tone === "attacker" ? "border-signal-red/40" : "border-ink-800";
-  return (
-    <div className={`border ${border} rounded-lg bg-ink-900/40 flex flex-col`}>
-      <div className="px-3 py-2 border-b border-ink-800 text-xs font-medium text-ink-100 uppercase tracking-wide">
-        {title}
-      </div>
-      <div className="p-3 text-xs space-y-2 flex-1">{children}</div>
-      {footer && <div className="px-3 py-2 border-t border-ink-800 text-[11px] text-ink-500">{footer}</div>}
-    </div>
-  );
-}
-
-const input = "mono text-xs bg-ink-900 border border-ink-700 rounded px-2 py-1.5";
+import NetworkDiagram from "./NetworkDiagram";
+import { Card, Badge, Value, PrimaryButton, SecondaryButton, ErrorBanner, inputCls } from "../components/Section";
 
 // Building a session costs a TrapGen plus the noise calibration, so a tab
 // switch reattaches to the live one instead of throwing the cloud away.
 let cachedSessionId = null;
 
 const ORDER = ["public_key", "stolen_key", "control"];
+const TITLES = {
+  public_key: "Public key only",
+  stolen_key: "Stolen period key",
+  control: "Garbage key (control)",
+};
 
-function AttackResult({ res, stale }) {
-  const title = res.control ? "negative control (garbage key)"
-    : res.kind === "public_key" ? "public key only" : `stolen sk_r|${res.stolen_period}`;
+function Panel({ title, note, children, tone }) {
+  const ring = tone === "attacker" ? "ring-[#7a3138]/60" : "ring-ink-800";
   return (
-    <Card title={`Attack result — ${title}`}
-      subtitle={`${res.periods.length} period(s) attacked, against ${res.records_at_run} stored record(s)`}>
+    <div className={`rounded-xl2 bg-ink-900 ring-1 ring-inset ${ring} flex flex-col min-w-0`}>
+      <div className="px-4 py-2.5 border-b border-ink-800 flex items-baseline justify-between gap-3">
+        <h3 className="text-2xs font-semibold uppercase tracking-[0.1em] text-ink-300">{title}</h3>
+        {note && <span className="text-2xs text-ink-500 mono truncate">{note}</span>}
+      </div>
+      <div className="p-4 space-y-3 flex-1">{children}</div>
+    </div>
+  );
+}
+
+function Row({ label, children }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-2xs text-ink-500 w-16 shrink-0">{label}</span>
+      {children}
+    </div>
+  );
+}
+
+/* One attack, scored against the truth. The recovered keyword is the thing the
+   reader is here to read, so it gets primary ink and a chip -- not small
+   coloured text on a dark panel. */
+function AttackResult({ res, stale }) {
+  const total = res.periods.reduce((a, p) => a + (p.total ?? 0), 0);
+  const got = res.periods.reduce((a, p) => a + (p.recovered ?? 0), 0);
+  const l3 = res.periods.reduce((a, p) => a + (p.rows ?? []).filter((r) => r.level3).length, 0);
+  return (
+    <Card
+      title={TITLES[res.control ? "control" : res.kind] + (res.kind === "stolen_key" && !res.control ? ` · sk_r|${res.stolen_period}` : "")}
+      subtitle={`${res.periods.length} period(s) · ${res.records_at_run} stored record(s)`}
+      actions={
+        <>
+          <Badge tone={got ? "red" : "green"}>{got}/{total} tags recovered</Badge>
+          {l3 > 0 && <Badge tone="red">{l3} plaintexts</Badge>}
+        </>
+      }>
       {stale && (
-        <div className="text-[11px] text-amber-400 bg-amber-500/10 border border-amber-600/30 rounded px-2.5 py-1.5 mb-3">
-          ⚠ The cloud has changed since this run — these numbers describe the database as it was then.
-          Re-launch to score the current one.
+        <div className="text-2xs text-signal-amber bg-signal-amber/10 ring-1 ring-inset ring-signal-amber/25
+                        rounded-lg px-3 py-2 mb-4">
+          The cloud changed after this run — these numbers describe the database as it was then.
         </div>
       )}
-      {res.periods.map((p) => (
-        <div key={p.period} className="mb-4 last:mb-0">
-          <div className="flex items-center gap-2 flex-wrap mb-2">
-            <Badge tone={p.outcome === "recovered" ? "red" : p.outcome === "unmeasured (timeout)" ? "neutral" : "green"}>
-              period {p.period}: {p.outcome} {p.recovered != null && `${p.recovered}/${p.total}`}
-            </Badge>
-            {p.forward_security_break && <Badge tone="amber">★ genuine forward-security break</Badge>}
-            {p.recovery_rate != null && (
-              <span className="text-[11px] text-ink-300 mono">
-                recovery {(p.recovery_rate * 100).toFixed(0)}%
-                {p.mean_trap_norm != null && ` · mean ‖Trap‖ ${p.mean_trap_norm.toFixed(0)}`}
-                {p.mean_margin != null && ` · mean margin ${p.mean_margin > 0 ? "+" : ""}${p.mean_margin.toFixed(0)}`}
-              </span>
+      <div className="space-y-5">
+        {res.periods.map((p) => (
+          <div key={p.period}>
+            <div className="flex items-center gap-2 flex-wrap mb-2.5">
+              <span className="text-[13px] font-semibold text-ink-100">Period {p.period}</span>
+              <Badge tone={p.outcome === "recovered" ? "red" : p.outcome === "unmeasured (timeout)" ? "neutral" : "green"}>
+                {p.outcome}
+              </Badge>
+              {p.forward_security_break && <Badge tone="amber">★ stolen key required</Badge>}
+              {p.recovery_rate != null && (
+                <span className="text-2xs text-ink-400 mono">
+                  {(p.recovery_rate * 100).toFixed(0)}% · ‖Trap‖ {p.mean_trap_norm?.toFixed(0)} · margin{" "}
+                  {p.mean_margin > 0 ? "+" : ""}{p.mean_margin?.toFixed(0)}
+                </span>
+              )}
+            </div>
+            {p.comparison_note && (
+              <p className={`text-2xs mb-2.5 ${p.forward_security_break ? "text-signal-amber" : "text-ink-500"}`}>
+                {p.comparison_note}
+              </p>
             )}
-            {p.basis_gs != null && (
-              <details className="text-[11px] text-ink-600">
-                <summary className="cursor-pointer">basis GS</summary>
-                <span className="mono">
-                  {p.basis_gs.toFixed(2)}{p.honest_gs != null && ` vs honest ${p.honest_gs.toFixed(2)}`}
-                </span>
-                <span className="block text-ink-600 max-w-xs leading-relaxed mt-1">
-                  A distributional bound on what SamplePre produces — it does not predict recovery.
-                  See the Recovery Analysis tab.
-                </span>
-              </details>
+            {p.error && <p className="text-2xs text-[#e55757] mono">{p.error}</p>}
+            {p.rows?.length > 0 && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-[13px]">
+                  <thead>
+                    <tr className="text-left text-2xs uppercase tracking-[0.08em] text-ink-500">
+                      <th className="pb-2 pr-4 font-medium">Record</th>
+                      <th className="pb-2 pr-4 font-medium">Recovered</th>
+                      <th className="pb-2 pr-4 font-medium">Truth</th>
+                      <th className="pb-2 font-medium">Plaintext</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {p.rows.map((r) => (
+                      <tr key={r.record_id} className="border-t border-ink-800/70 align-middle">
+                        <td className="py-2 pr-4 mono text-ink-500">#{r.record_id}</td>
+                        <td className="py-2 pr-4">
+                          {r.recovered?.length
+                            ? <Value tone={r.correct ? "break" : "warn"}>{r.recovered.join(", ")}</Value>
+                            : <span className="text-ink-600">—</span>}
+                        </td>
+                        <td className="py-2 pr-4 mono text-ink-300">{r.true_disease}</td>
+                        <td className="py-2">
+                          {r.level3
+                            ? <Value tone="break" className="max-w-[28rem] truncate">{r.plaintext}</Value>
+                            : r.correct
+                              ? <span className="text-2xs text-ink-500">tag only — plaintext hit the decode bound</span>
+                              : <span className="text-ink-600">—</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {p.h2_collisions?.length > 0 && (
+              <p className="text-2xs text-signal-amber mt-2">
+                {p.h2_collisions.map((c) => c.join(" / ")).join("; ")} share an H2 tag — indistinguishable to any searcher.
+              </p>
             )}
           </div>
-          {p.comparison_note && (
-            <div className={`text-[11px] mb-2 ${p.forward_security_break ? "text-amber-400" : "text-ink-400"}`}>
-              {p.forward_security_break ? "★ " : "↳ "}{p.comparison_note}
-            </div>
-          )}
-          {p.error && <div className="text-[11px] text-signal-red mono">{p.error}</div>}
-          {p.rows?.length > 0 && (
-            <table className="w-full mono text-[11px]">
-              <thead><tr className="text-left text-ink-500">
-                <th className="pb-1 pr-3">record</th><th className="pb-1 pr-3">recovered disease</th>
-                <th className="pb-1 pr-3">true disease</th><th className="pb-1 pr-3">ciphertext</th>
-                <th className="pb-1">plaintext</th>
-              </tr></thead>
-              <tbody>
-                {p.rows.map((r) => (
-                  <tr key={r.record_id} className="border-t border-ink-800">
-                    <td className="py-1 pr-3 text-ink-400">#{r.record_id}</td>
-                    <td className={`py-1 pr-3 ${r.correct ? "text-signal-red" : "text-ink-500"}`}>
-                      {r.recovered?.length ? r.recovered.join(", ") : "—"}
-                    </td>
-                    <td className="py-1 pr-3 text-ink-300">{r.true_disease}</td>
-                    <td className="py-1 pr-3 text-ink-500">{r.ciphertext_fetched}</td>
-                    <td className="py-1">
-                      {r.level3 ? <span className="text-signal-red">“{r.plaintext}”</span>
-                        : r.correct ? <span className="text-ink-500">keyword ✓ / plaintext ✗ (decode bound)</span>
-                          : <span className="text-ink-600">—</span>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-          {p.h2_collisions?.length > 0 && (
-            <div className="text-[11px] text-amber-400 mt-1">
-              Dictionary words sharing an H2 tag ({p.h2_collisions.map((c) => c.join("/")).join("; ")}) cannot be
-              told apart by any searcher, honest or not.
-            </div>
-          )}
-        </div>
-      ))}
-      <div className="text-sm text-ink-200 leading-relaxed border-t border-ink-800 pt-3">{res.conclusion}</div>
+        ))}
+      </div>
+      <details className="mt-4 pt-3 border-t border-ink-800">
+        <summary className="text-2xs text-ink-500 cursor-pointer hover:text-ink-300">Full conclusion</summary>
+        <p className="text-[13px] text-ink-300 leading-relaxed mt-2">{res.conclusion}</p>
+      </details>
     </Card>
   );
 }
@@ -364,205 +313,187 @@ export default function NetworkTab({ onTrace }) {
   };
 
   return (
-    <div className="space-y-5 max-w-6xl">
-      <Card title="Network" subtitle="Doctor, cloud, verifier and attacker as live nodes — drive the scheme and attack it">
-        <div className="flex flex-wrap items-end gap-3 text-xs">
-          <label className="block"><div className="text-ink-400 mb-1">n</div>
-            <select value={n} onChange={(e) => setN(e.target.value)} className={input}>
-              {(options?.n_choices ?? [4, 8, 16]).map((v) => <option key={v} value={v}>{v}</option>)}
-            </select></label>
-          <label className="block"><div className="text-ink-400 mb-1">q</div>
-            <select value={q} onChange={(e) => setQ(e.target.value)} className={input}>
-              {(options?.q_choices ?? [257]).map((v) => <option key={v} value={v}>{v}</option>)}
-            </select></label>
-          <div><div className="text-ink-400 mb-1">m (derived)</div>
-            <div className="mono text-ink-200 px-2 py-1.5">{chosen?.m ?? state?.m ?? "—"}</div></div>
-          <PrimaryButton onClick={() => apply()} disabled={busy != null || chosen?.available === false}>
-            {busy === "rebuild" ? "Rebuilding…" : "Apply / rebuild"}
-          </PrimaryButton>
-          <SecondaryButton onClick={runScript} disabled={busy != null}>Run demo script</SecondaryButton>
-          {state?.n === 4 && state?.q === 257 && <Badge tone="blue">paper's demo parameters</Badge>}
+    <div className="space-y-4">
+      {/* ---- the architecture, and the one control strip that drives it ---- */}
+      <Card
+        title="Network"
+        subtitle="Everything below the dashed line is public. The attacker lives there because it never has to cross it."
+        actions={
+          <>
+            <select value={n} onChange={(e) => setN(e.target.value)} className={`${inputCls} w-[5.5rem]`}>
+              {(options?.n_choices ?? [4, 8, 16]).map((v) => <option key={v} value={v}>n = {v}</option>)}
+            </select>
+            <select value={q} onChange={(e) => setQ(e.target.value)} className={`${inputCls} w-[7.5rem]`}>
+              {(options?.q_choices ?? [257]).map((v) => <option key={v} value={v}>q = {v}</option>)}
+            </select>
+            <span className="text-2xs text-ink-500 mono hidden sm:inline">m {chosen?.m ?? state?.m ?? "—"}</span>
+            <SecondaryButton onClick={() => apply()} disabled={busy != null || chosen?.available === false}>
+              {busy === "rebuild" ? "Rebuilding…" : "Rebuild"}
+            </SecondaryButton>
+            <PrimaryButton onClick={runScript} disabled={busy != null}>Run demo</PrimaryButton>
+          </>
+        }
+        pad={false}>
+        <div className="px-3 pt-2 pb-1">
+          <NetworkDiagram
+            activeEdge={activeEdge} pulse={pulse}
+            period={state?.current_period ?? 0}
+            blobs={cloudRecords.length}
+            attackerHolds={attackKind === "public_key" ? "public key only" : `stolen sk_r|${stolenPeriod ?? "?"}`} />
         </div>
-        {chosen?.available === false && (
-          <div className="text-xs text-amber-400 mt-2">
-            Not available at n={n}, q={q}: {chosen.reason}
-          </div>
-        )}
-        <p className="text-[11px] text-ink-500 mt-2 leading-relaxed">{options?.note}</p>
+        <div className="px-5 py-3 border-t border-ink-800 flex items-center gap-3 flex-wrap min-h-[2.75rem]">
+          {script && <span className="text-2xs text-accent-soft">▶ {script}</span>}
+          {!script && lastEvent && (
+            <span className="text-2xs text-ink-400 mono">
+              {lastEvent.label}
+              {lastEvent.data?.plaintext && <span className="text-ink-100"> → “{lastEvent.data.plaintext}”</span>}
+            </span>
+          )}
+          {!script && !lastEvent && <span className="text-2xs text-ink-600">Store a record to begin.</span>}
+          {chosen?.available === false && (
+            <span className="text-2xs text-signal-amber">n={n}, q={q} unavailable — {chosen.reason}</span>
+          )}
+          {state && !available && <span className="text-2xs text-signal-amber">⚠ {state.unavailable_reason}</span>}
+        </div>
         <ErrorBanner message={error} />
-        {state && !available && (
-          <div className="text-xs text-amber-400 bg-amber-500/10 border border-amber-600/30 rounded px-3 py-2 mt-2">
-            ⚠ {state.unavailable_reason}
-          </div>
-        )}
-        {script && <div className="text-xs text-signal-blue mt-2">▶ {script}</div>}
       </Card>
 
       {state && available && (
         <>
-          <Card title="Live network">
-            <NetworkDiagram activeEdge={activeEdge} pulse={pulse}
-              periodLabel={`period ${state.current_period} · pk ${periods[state.current_period]?.pk_fingerprint}`}
-              cloudCount={cloudRecords.length}
-              attackerHolds={attackKind === "public_key" ? "public key only" : `stolen sk_r|${stolenPeriod ?? "?"}`} />
-            {lastEvent && (
-              <div className="text-xs text-ink-300 mono border-t border-ink-800 pt-2 mt-1">
-                {lastEvent.label}
-                {lastEvent.data?.plaintext && <span className="text-signal-green"> → “{lastEvent.data.plaintext}”</span>}
-                {lastEvent.data?.forward_security_note && (
-                  <div className="text-[11px] text-amber-400 mt-1">{lastEvent.data.forward_security_note}</div>
-                )}
-              </div>
-            )}
-          </Card>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <Node title="Doctor"
-              footer={`n=${state.n} · q=${state.q} · m=${state.m} · period ${state.current_period} · pk ${periods[state.current_period]?.pk_fingerprint}`}>
-              <div className="space-y-1">
-                <div className="text-ink-400">Add a record</div>
-                <div className="flex gap-1.5">
-                  <select value={keyword} onChange={(e) => setKeyword(e.target.value)} className={`${input} flex-1`}>
+          {/* ---- the three actors, side by side, full width ---- */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            <div className="lg:col-span-3">
+              <Panel title="Doctor" note={`period ${state.current_period} · pk ${periods[state.current_period]?.pk_fingerprint}`}>
+                <Row label="store">
+                  <select value={keyword} onChange={(e) => setKeyword(e.target.value)} className={inputCls}>
                     {dict.map((d) => <option key={d} value={d}>{d}</option>)}
                   </select>
-                </div>
-                <input value={text} onChange={(e) => setText(e.target.value)}
-                  className={`${input} w-full`} placeholder="record text" />
+                </Row>
+                <input value={text} onChange={(e) => setText(e.target.value)} placeholder="record text"
+                  className={inputCls} />
                 <SecondaryButton onClick={addRecord} disabled={busy != null}>Encrypt → cloud</SecondaryButton>
-              </div>
-              <div className="space-y-1 pt-2 border-t border-ink-800">
-                <div className="text-ink-400">Search</div>
-                <div className="flex gap-1.5">
-                  <select value={query} onChange={(e) => setQuery(e.target.value)} className={`${input} flex-1`}>
-                    {dict.map((d) => <option key={d} value={d}>{d}</option>)}
-                  </select>
-                  <SecondaryButton onClick={doSearch} disabled={busy != null}>Trapdoor →</SecondaryButton>
-                </div>
-              </div>
-              <div className="space-y-1 pt-2 border-t border-ink-800">
-                <div className="text-ink-400">Decrypt a stored record</div>
-                <div className="flex gap-1.5">
-                  <select value={decryptId} onChange={(e) => setDecryptId(e.target.value)} className={`${input} flex-1`}>
-                    {cloudRecords.map((r) => <option key={r.record_id} value={r.record_id}>#{r.record_id} (period {r.period})</option>)}
-                  </select>
-                  <SecondaryButton onClick={decrypt} disabled={busy != null || !cloudRecords.length}>Decrypt</SecondaryButton>
-                </div>
-              </div>
-              <div className="pt-2 border-t border-ink-800">
-                <SecondaryButton onClick={advance} disabled={busy != null}>Advance period (KeyExt)</SecondaryButton>
-              </div>
-            </Node>
 
-            <Node title="Cloud" footer="Dumb storage: it holds blobs and returns them. It learns nothing.">
-              {cloudRecords.length === 0 && <div className="text-ink-500">empty — the doctor has stored nothing yet</div>}
-              {cloudRecords.length > 0 && (
-                <table className="w-full mono text-[11px]">
-                  <thead><tr className="text-left text-ink-500">
-                    <th className="pb-1 pr-2">j</th><th className="pb-1 pr-2">rec</th>
-                    <th className="pb-1 pr-2">CT</th><th className="pb-1 pr-2">CM</th><th className="pb-1">bits</th>
-                  </tr></thead>
-                  <tbody>
-                    {cloudRecords.map((r) => (
-                      <tr key={r.record_id} className="border-t border-ink-800 text-ink-300">
-                        <td className="py-1 pr-2">{r.period}</td>
-                        <td className="py-1 pr-2">#{r.record_id}</td>
-                        <td className="py-1 pr-2 text-ink-500">{r.ct_fingerprint}</td>
-                        <td className="py-1 pr-2 text-ink-500">{r.cm_fingerprint}</td>
-                        <td className="py-1">{r.cm_bits}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </Node>
+                <div className="pt-3 border-t border-ink-800 space-y-3">
+                  <Row label="search">
+                    <select value={query} onChange={(e) => setQuery(e.target.value)} className={inputCls}>
+                      {dict.map((d) => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                  </Row>
+                  <Row label="decrypt">
+                    <select value={decryptId} onChange={(e) => setDecryptId(e.target.value)} className={inputCls}>
+                      {cloudRecords.map((r) => (
+                        <option key={r.record_id} value={r.record_id}>#{r.record_id} · period {r.period}</option>
+                      ))}
+                    </select>
+                  </Row>
+                  <div className="flex gap-2 flex-wrap">
+                    <SecondaryButton onClick={doSearch} disabled={busy != null}>Search</SecondaryButton>
+                    <SecondaryButton onClick={decrypt} disabled={busy != null || !cloudRecords.length}>Decrypt</SecondaryButton>
+                    <SecondaryButton onClick={advance} disabled={busy != null}>Next period</SecondaryButton>
+                  </div>
+                </div>
+              </Panel>
+            </div>
 
-            <Node title="Verifier (blockchain)"
-              footer="Verify uses NO secret — anyone can run it. That is what makes both attacks possible.">
-              {lastEvent?.data?.N0 !== undefined && lastEvent.edge === "doctor->verifier->doctor" ? (
-                <div className="space-y-1">
-                  <div className="text-ink-400">last trapdoor</div>
-                  <div className="mono text-ink-200">{lastEvent.data.keyword} @ period {lastEvent.data.period}</div>
-                  <div className="mono">
+            <div className="lg:col-span-5">
+              <Panel title="Cloud" note={`${cloudRecords.length} blob pair(s) · learns nothing`}>
+                {cloudRecords.length === 0 ? (
+                  <p className="text-2xs text-ink-600">Empty.</p>
+                ) : (
+                  <div className="overflow-x-auto max-h-[17rem]">
+                    <table className="w-full text-[13px] mono">
+                      <thead className="sticky top-0 bg-ink-900">
+                        <tr className="text-left text-2xs uppercase tracking-[0.08em] text-ink-500">
+                          <th className="pb-2 pr-3 font-medium">j</th><th className="pb-2 pr-3 font-medium">rec</th>
+                          <th className="pb-2 pr-3 font-medium">CT</th><th className="pb-2 pr-3 font-medium">CM</th>
+                          <th className="pb-2 font-medium">bits</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {cloudRecords.map((r) => (
+                          <tr key={r.record_id} className="border-t border-ink-800/70 text-ink-300">
+                            <td className="py-1.5 pr-3 text-ink-500">{r.period}</td>
+                            <td className="py-1.5 pr-3">#{r.record_id}</td>
+                            <td className="py-1.5 pr-3 text-ink-500">{r.ct_fingerprint}</td>
+                            <td className="py-1.5 pr-3 text-ink-500">{r.cm_fingerprint}</td>
+                            <td className="py-1.5">{r.cm_bits}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </Panel>
+            </div>
+
+            <div className="lg:col-span-4 space-y-4">
+              <Panel title="Verifier" note="public — no secret">
+                {lastEvent?.edge === "doctor->verifier->doctor" ? (
+                  <div className="space-y-2">
+                    <div className="mono text-[13px] text-ink-300">
+                      {lastEvent.data.keyword} @ period {lastEvent.data.period}
+                    </div>
                     {lastEvent.data.N0 != null
-                      ? <span className="text-signal-green">match → record #{lastEvent.data.N0}</span>
-                      : <span className="text-ink-400">no match</span>}
+                      ? <Value tone="ok">match → record #{lastEvent.data.N0}</Value>
+                      : <Value>no match</Value>}
+                    <div className="text-2xs text-ink-500">
+                      truth {lastEvent.data.true_matches?.length
+                        ? lastEvent.data.true_matches.map((x) => `#${x}`).join(", ") : "none"}
+                      {" · "}{lastEvent.data.correct ? "correct" : "INCORRECT"}
+                    </div>
                   </div>
-                  <div className="text-[11px] text-ink-500">
-                    true matches: {lastEvent.data.true_matches?.length ? lastEvent.data.true_matches.map((x) => `#${x}`).join(", ") : "none"} ·{" "}
-                    {lastEvent.data.correct ? "correct" : "INCORRECT"}
-                  </div>
-                </div>
-              ) : <div className="text-ink-500">waiting for a trapdoor</div>}
-            </Node>
-          </div>
+                ) : <p className="text-2xs text-ink-600">Waiting for a trapdoor.</p>}
+              </Panel>
 
-          <Card title="Attacker" className="border-signal-red/30">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-3 text-xs">
-                <div className="flex gap-2 items-center">
+              <Panel title="Attacker" tone="attacker"
+                note={attackKind === "public_key" ? "public key only" : `stolen sk_r|${stolenPeriod ?? "?"}`}>
+                <div className="flex gap-1.5">
                   {["public_key", "stolen_key"].map((k) => (
                     <button key={k} onClick={() => { setAttackKind(k); setPeriodSel("all"); }}
-                      className={`px-2.5 py-1.5 rounded border text-xs ${attackKind === k
-                        ? "border-signal-red text-signal-red bg-signal-red/10" : "border-ink-700 text-ink-400"}`}>
-                      {k === "public_key" ? "Public-key only" : "Stolen key"}
+                      className={`px-2.5 py-1.5 rounded-lg text-2xs ring-1 ring-inset transition-colors ${
+                        attackKind === k ? "ring-[#d03b3b]/60 text-[#e55757] bg-signal-red/10"
+                                         : "ring-ink-700 text-ink-400 hover:text-ink-200"}`}>
+                      {k === "public_key" ? "Public key only" : "Stolen key"}
                     </button>
                   ))}
-                  {attackKind === "stolen_key" && (
-                    <select value={stolenPeriod ?? ""} onChange={(e) => { setStolenPeriod(Number(e.target.value)); setPeriodSel("all"); }}
-                      className={input}>
-                      <option value="">steal which period?</option>
-                      {periods.map((p) => <option key={p.period} value={p.period}>steal sk_r|{p.period}</option>)}
-                    </select>
-                  )}
                 </div>
-                <div>
-                  <div className="text-ink-400 mb-1">attack which period?</div>
-                  <select value={periodSel} onChange={(e) => setPeriodSel(e.target.value)} className={input}>
+                {attackKind === "stolen_key" && (
+                  <Row label="steal">
+                    <select value={stolenPeriod ?? ""} className={inputCls}
+                      onChange={(e) => { setStolenPeriod(Number(e.target.value)); setPeriodSel("all"); }}>
+                      <option value="">choose a period…</option>
+                      {periods.map((p) => <option key={p.period} value={p.period}>sk_r|{p.period}</option>)}
+                    </select>
+                  </Row>
+                )}
+                <Row label="target">
+                  <select value={periodSel} onChange={(e) => setPeriodSel(e.target.value)} className={inputCls}>
                     <option value="all">
-                      {eligible.length ? `all ${eligible.length} reachable period(s): ${eligible.join(", ")}` : "no reachable period"}
+                      {eligible.length ? `all reachable (${eligible.join(", ")})` : "none reachable"}
                     </option>
                     {eligible.map((i) => <option key={i} value={i}>period {i}</option>)}
                   </select>
-                  {attackKind === "stolen_key" && stolenPeriod != null && (
-                    <div className="text-[11px] text-ink-500 mt-1">
-                      Only periods before {stolenPeriod} are listed — a stolen key reaches backward, never forward.
-                    </div>
-                  )}
-                  {attackKind === "stolen_key" && stolenPeriod == null && (
-                    <div className="text-[11px] text-amber-400 mt-1">Pick which period's key is stolen first.</div>
-                  )}
-                </div>
-                <label className="flex items-center gap-2 text-ink-300">
+                </Row>
+                <label className="flex items-center gap-2 text-2xs text-ink-400">
                   <input type="checkbox" checked={control} onChange={(e) => setControl(e.target.checked)} />
-                  use a garbage key (negative control — must recover nothing)
+                  garbage key (control — must recover nothing)
                 </label>
                 <PrimaryButton onClick={launch} disabled={busy != null || !ticked.length}>
                   {busy === "attack" ? "Attacking…" : "Launch attack"}
                 </PrimaryButton>
-              </div>
-              <div className="text-xs">
-                <div className="text-ink-500 uppercase text-[10px] mb-2">what the attacker holds</div>
-                <div className="text-signal-green mb-1">✓ the cloud's stored ciphertexts (public)</div>
-                <div className="text-signal-green mb-1">✓ pk_r|i and the R matrices (public)</div>
-                <div className="text-signal-green mb-1">✓ mu (public parameter)</div>
-                <div className="text-signal-green mb-1">✓ the disease dictionary (public knowledge)</div>
-                {attackKind === "stolen_key" && stolenPeriod != null && (
-                  <div className="text-amber-400 mb-1">⚠ sk_r|{stolenPeriod} — the one stolen secret</div>
+                {attackKind === "stolen_key" && stolenPeriod == null && (
+                  <p className="text-2xs text-signal-amber">Choose which period’s key is stolen.</p>
                 )}
-                <div className="text-ink-500 line-through mb-1">🔒 every other period's secret key</div>
-                <div className="text-ink-500 line-through mb-1">🔒 record plaintexts and keyword tags</div>
-                <div className="text-[11px] text-ink-500 mt-2 leading-relaxed">
-                  The attack is handed a period view whose records tuple is empty, so no keyword,
-                  plaintext or secret key can reach it through the data.
-                </div>
-              </div>
+                {attackKind === "stolen_key" && stolenPeriod != null && (
+                  <p className="text-2xs text-ink-600">Backward only — periods before {stolenPeriod}.</p>
+                )}
+              </Panel>
             </div>
-          </Card>
+          </div>
 
           {ORDER.filter((k) => results[k]).map((k) => (
             <AttackResult key={k} res={results[k]} stale={results[k].records_at_run !== cloudRecords.length} />
           ))}
-
         </>
       )}
     </div>

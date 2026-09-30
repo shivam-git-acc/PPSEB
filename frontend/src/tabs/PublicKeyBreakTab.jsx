@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { api } from "../api";
-import { Card, Badge, PrimaryButton, ErrorBanner } from "../components/Section";
+import { Card, Badge, Value, PrimaryButton, ErrorBanner } from "../components/Section";
 
 function Norms({ norms }) {
   const rows = [
@@ -54,15 +54,13 @@ export default function PublicKeyBreakTab({ initialized }) {
   const doctorOk = res?.honest_decrypt_count ?? 0;
 
   return (
-    <div className="space-y-5 max-w-4xl">
+    <div className="space-y-4">
       <Card title="Public-Key Break"
         subtitle="Recover which disease each encrypted record is tagged with, holding only the public key">
-        <p className="text-sm text-ink-300 leading-relaxed">
-          The doctor encrypts a small database: each record carries a disease keyword. The attacker gets the
-          public key, the public ciphertext database and a list of diseases — diseases are low-entropy and
-          enumerable, so the list is public knowledge. No secret key, no captured trapdoor, no TrapGen. The
-          attack builds a lattice basis from the public key alone, reduces it at LLL-level effort, and makes
-          one trapdoor per disease to search the database.
+        <p className="text-[13px] text-ink-300 leading-relaxed max-w-3xl">
+          Holding only the <b className="text-ink-100">public key</b>, the stored ciphertexts and a list of
+          diseases, the attacker builds a basis, mints one trapdoor per disease and reads every record's tag.
+          No secret key, no captured trapdoor.
         </p>
         <div className="flex items-end gap-4 flex-wrap mt-4">
           <label className="block"><div className="text-xs text-ink-400 mb-1">n</div>
@@ -131,8 +129,10 @@ export default function PublicKeyBreakTab({ initialized }) {
                   {res.attack.rows.map((row) => (
                     <tr key={row.record} className="border-t border-ink-800">
                       <td className="py-1.5 pr-4 text-ink-400">#{row.record}</td>
-                      <td className={`py-1.5 pr-4 ${row.correct ? "text-signal-red" : "text-ink-400"}`}>
-                        {row.recovered.length ? row.recovered.join(", ") : "—"}
+                      <td className="py-1.5 pr-4">
+                        {row.recovered.length
+                          ? <Value tone={row.correct ? "break" : "warn"}>{row.recovered.join(", ")}</Value>
+                          : <span className="text-ink-600">—</span>}
                       </td>
                       <td className="py-1.5 pr-4 text-ink-300">{row.true_disease}</td>
                       <td className="py-1.5">
@@ -181,7 +181,9 @@ export default function PublicKeyBreakTab({ initialized }) {
                         <td className={`py-1.5 pr-4 ${doc ? "text-signal-green" : "text-amber-400"}`}>
                           {doc ? "✓ decrypted" : "✗ failed"}
                         </td>
-                        <td className="py-1.5 text-signal-red text-xs">{att?.recovered_plaintext ?? ""}</td>
+                        <td className="py-1.5">{att?.recovered_plaintext
+                          ? <Value tone="break" className="max-w-[26rem] truncate">{att.recovered_plaintext}</Value>
+                          : <span className="text-ink-600">—</span>}</td>
                       </tr>
                     );
                   })}

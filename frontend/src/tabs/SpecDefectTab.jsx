@@ -46,7 +46,7 @@ export default function SpecDefectTab({ onTrace, initialized }) {
   };
 
   return (
-    <div className="space-y-5 max-w-4xl">
+    <div className="space-y-4">
       <Card title="Algorithm 2 (KeyExt), as printed" subtitle="Two lines reference variables that do not exist yet.">
         <div className="mono text-xs bg-ink-950 border border-ink-800 rounded p-3 space-y-1">
           <div><span className="text-ink-600">line 6:  </span><span className="text-amber-400">{LINE_6}</span></div>

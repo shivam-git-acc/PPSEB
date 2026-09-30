@@ -2,42 +2,107 @@
 @tailwind components;
 @tailwind utilities;
 
-html {
+/* ---------------------------------------------------------------------------
+   Theme. Dark is the only mode this instrument ships; the surface (#101219) is
+   the one the chart palette was validated against, so panels must not drift
+   off it.
+
+   Status colour rule (from the palette validation): red and green are
+   indistinguishable under deuteranopia (CVD dE 4.1). Every status colour here
+   is therefore paired with a second channel -- a text label, a shape, or a
+   position on an axis -- and never carries meaning on its own.
+--------------------------------------------------------------------------- */
+
+:root {
   color-scheme: dark;
+  --surface-page: #0a0c11;
+  --surface-panel: #101219;
+  --grid: #1a1f29;
+  --axis: #2b3241;
 }
 
+html, body, #root { height: 100%; }
+
 body {
-  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-family: "Inter var", Inter, ui-sans-serif, system-ui, sans-serif;
+  background:
+    radial-gradient(1100px 620px at 12% -12%, rgba(110, 140, 255, 0.10), transparent 62%),
+    radial-gradient(900px 520px at 92% 0%, rgba(25, 158, 112, 0.07), transparent 58%),
+    var(--surface-page);
+  background-attachment: fixed;
+  color: #a4aec0;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 .mono {
-  font-family: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Consolas, monospace;
+  font-family: ui-monospace, SFMono-Regular, "JetBrains Mono", "Cascadia Mono",
+    Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "ss01", "zero";
 }
 
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+/* Columns of figures that must line up vertically. */
+.tnum { font-variant-numeric: tabular-nums; }
+
+/* A measured value the reader is meant to actually read: primary ink, with a
+   coloured dot beside it carrying the status. Never coloured low-contrast text
+   on a dark panel -- that was the legibility complaint. */
+.value-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.15rem 0.5rem 0.15rem 0.4rem;
+  border-radius: 0.375rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #e8ecf4;
+  font-weight: 500;
+  letter-spacing: 0.005em;
 }
-::-webkit-scrollbar-track {
-  background: transparent;
+.value-chip::before {
+  content: "";
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: currentColor;
+  flex: none;
 }
-::-webkit-scrollbar-thumb {
-  background: #333d4d;
-  border-radius: 6px;
+.value-chip.is-break { background: rgba(208, 59, 59, 0.14); border-color: rgba(208, 59, 59, 0.38); }
+.value-chip.is-break::before { background: #e55757; }
+.value-chip.is-ok { background: rgba(12, 163, 12, 0.13); border-color: rgba(12, 163, 12, 0.34); }
+.value-chip.is-ok::before { background: #35c235; }
+.value-chip.is-warn { background: rgba(250, 178, 25, 0.13); border-color: rgba(250, 178, 25, 0.34); }
+.value-chip.is-warn::before { background: #fab219; }
+
+.panel {
+  background: linear-gradient(180deg, rgba(255,255,255,0.025), rgba(255,255,255,0) 120px),
+              var(--surface-panel);
+  border: 1px solid #1f2430;
+  border-radius: 0.875rem;
+  box-shadow: 0 1px 0 0 rgba(255,255,255,0.04) inset, 0 8px 24px -14px rgba(0,0,0,0.75);
 }
 
-@keyframes fade-in-up {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
+.hairline { border-color: #1f2430; }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #2a3040; border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: #3a4356; }
+
+:where(button, a, input, select, summary):focus-visible {
+  outline: 2px solid #6e8cff;
+  outline-offset: 2px;
+  border-radius: 0.375rem;
 }
-.trace-event-enter {
-  animation: fade-in-up 220ms ease-out;
-}
+
+@keyframes fade-in-up { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.enter { animation: fade-in-up 220ms cubic-bezier(0.22, 1, 0.36, 1); }
 
 @keyframes flash-match {
-  0%, 100% { background-color: rgba(62, 207, 142, 0.12); }
-  50% { background-color: rgba(62, 207, 142, 0.32); }
+  0%, 100% { background-color: rgba(12, 163, 12, 0.10); }
+  50%      { background-color: rgba(12, 163, 12, 0.30); }
 }
-.flash-match {
-  animation: flash-match 900ms ease-in-out 2;
-}
+.flash-match { animation: flash-match 900ms ease-in-out 2; }
+
+@keyframes packet { from { offset-distance: 0%; opacity: 0; } 12%, 88% { opacity: 1; } to { offset-distance: 100%; opacity: 0; } }

@@ -179,7 +179,7 @@ export default function ForwardSecTab({ onTrace, initialized, params }) {
   });
 
   return (
-    <div className="space-y-5 max-w-4xl">
+    <div className="space-y-4">
       <Card title="Forward-Security Norm Experiment" subtitle="The H1 dilemma: the paper specifies no construction, and the two natural choices fail differently">
         <p className="text-sm text-ink-300 leading-relaxed">
           Stealing the CURRENT trapdoor sk_rJ must not reveal any EARLIER sk_ri. Consecutive

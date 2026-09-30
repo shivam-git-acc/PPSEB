@@ -7,15 +7,15 @@ import { api } from "../api";
 import { Card, Badge, PrimaryButton, SecondaryButton, ErrorBanner } from "../components/Section";
 
 const OUTCOMES = {
-  broke: { y: 1, label: "broke", colour: "#ef4444" },
-  attack_failed: { y: 2, label: "attack ran, failed", colour: "#4ade80" },
-  "timed_out (unmeasured)": { y: 3, label: "unmeasured (timeout)", colour: "#8a8a94" },
-  "n/a (honest incorrect)": { y: 4, label: "n/a: honest incorrect", colour: "#4b4b55" },
-  "n/a (H2)": { y: 4, label: "n/a: H2", colour: "#4b4b55" },
-  untrusted: { y: 5, label: "untrusted", colour: "#f59e0b" },
-  error: { y: 5, label: "error", colour: "#6b2426" },
+  broke: { y: 1, label: "broke", colour: "#d03b3b" },
+  attack_failed: { y: 2, label: "attack ran, failed", colour: "#0ca30c" },
+  "timed_out (unmeasured)": { y: 3, label: "unmeasured (timeout)", colour: "#6f7a8d" },
+  "n/a (honest incorrect)": { y: 4, label: "n/a: honest incorrect", colour: "#2b3241" },
+  "n/a (H2)": { y: 4, label: "n/a: H2", colour: "#2b3241" },
+  untrusted: { y: 5, label: "untrusted", colour: "#fab219" },
+  error: { y: 5, label: "error", colour: "#7a3138" },
 };
-const STOLEN_COLOURS = { broke: "#fb923c", attack_failed: "#4ade80", "timed_out (unmeasured)": "#8a8a94" };
+const STOLEN_COLOURS = { broke: "#d95926", attack_failed: "#0ca30c", "timed_out (unmeasured)": "#6f7a8d" };
 const Y_TICKS = { 1: "broke", 2: "failed", 3: "unmeasured", 4: "n/a", 5: "untrusted" };
 const VERDICT_TONE = {
   "BROKEN (public-key only)": "red",
@@ -100,7 +100,7 @@ export default function SecurityBoundaryTab({ initialized }) {
   const pkPoints = withBits.map((c) => ({ ...c, x: c.bits, y: outcomeOf(c).y - 0.13, colour: outcomeOf(c).colour }));
   const stolenPoints = withBits.filter((c) => c.stolen_outcome).map((c) => ({
     ...c, x: c.bits, y: (OUTCOMES[c.stolen_outcome] ?? OUTCOMES.error).y + 0.13,
-    colour: STOLEN_COLOURS[c.stolen_outcome] ?? "#6b2426",
+    colour: STOLEN_COLOURS[c.stolen_outcome] ?? "#7a3138",
   }));
   const brokeBits = cells.filter((c) => c.outcome === "broke" && c.bits != null).map((c) => c.bits);
   const maxBroke = brokeBits.length ? Math.max(...brokeBits) : null;
@@ -108,16 +108,14 @@ export default function SecurityBoundaryTab({ initialized }) {
   const tally = snap?.stolen_key_tally;
 
   return (
-    <div className="space-y-5 max-w-5xl">
+    <div className="space-y-4">
       <Card title="Security Boundary"
         subtitle="Public-key-only vs stolen-key attack, on one estimated bit-security axis">
-        <p className="text-sm text-ink-300 leading-relaxed">
-          Each (n, q) runs <b>two</b> attacks against the <b>same</b> frozen earlier-period database.
-          Attack 1 holds only the public key. Attack 2 steals the current period's secret key sk<sub>r|J</sub>{" "}
-          and transforms it backward by the public R-product. The x-axis is an <b>estimate</b>; the outcome is{" "}
-          <b>measured</b>. The stolen key only demonstrates a forward-security break where the public key
-          alone <i>failed</i> — so a cell the public key already breaks is reported as redundant theft, not
-          as a forward-security break. A point that ran out of budget is <b>unmeasured</b>, never "secure".
+        <p className="text-[13px] text-ink-300 leading-relaxed max-w-3xl">
+          Two attacks per (n, q), same frozen database: public key alone, and a stolen sk<sub>r|J</sub> pulled
+          backward. The x-axis is <b className="text-ink-100">estimated</b>; the outcome is{" "}
+          <b className="text-ink-100">measured</b>. A cell the public key already breaks counts as redundant
+          theft, not a forward-security break — and a cell that ran out of budget is unmeasured, never secure.
         </p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs mt-4">
           <label className="block col-span-2 md:col-span-4"><div className="text-ink-400 mb-1">grid as n:q pairs</div>
@@ -173,19 +171,19 @@ export default function SecurityBoundaryTab({ initialized }) {
           subtitle="Circle = public key only. Triangle = stolen key. Red/orange = the attack got a working trapdoor; grey = out of budget, i.e. unmeasured.">
           <ResponsiveContainer width="100%" height={320}>
             <ScatterChart margin={{ top: 10, right: 20, bottom: 28, left: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#2a2a30" />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--grid)" />
               {maxBroke != null && (
-                <ReferenceArea x1={0} x2={maxBroke} fill="#ef4444" fillOpacity={0.09}
-                  label={{ value: `public key alone breaks ≤ ~${maxBroke.toFixed(0)} bits`, fill: "#ef4444", fontSize: 11, position: "insideTopLeft" }} />
+                <ReferenceArea x1={0} x2={maxBroke} fill="#d03b3b" fillOpacity={0.09}
+                  label={{ value: `public key alone breaks ≤ ~${maxBroke.toFixed(0)} bits`, fill: "#d03b3b", fontSize: 11, position: "insideTopLeft" }} />
               )}
-              <XAxis type="number" dataKey="x" name="estimated bits" stroke="#8a8a94" fontSize={11}
+              <XAxis type="number" dataKey="x" name="estimated bits" stroke="#6f7a8d" fontSize={11}
                 domain={[0, "dataMax + 10"]}
-                label={{ value: "estimated security (bits, core-SVP)", position: "insideBottom", offset: -14, fill: "#8a8a94", fontSize: 11 }} />
-              <YAxis type="number" dataKey="y" stroke="#8a8a94" fontSize={11} domain={[0.5, 5.5]}
+                label={{ value: "estimated security (bits, core-SVP)", position: "insideBottom", offset: -14, fill: "#6f7a8d", fontSize: 11 }} />
+              <YAxis type="number" dataKey="y" stroke="#6f7a8d" fontSize={11} domain={[0.5, 5.5]}
                 ticks={[1, 2, 3, 4, 5]} tickFormatter={(v) => Y_TICKS[v] ?? ""} width={96} />
               <ZAxis range={[90, 90]} />
               <Tooltip
-                contentStyle={{ background: "#16161a", border: "1px solid #2a2a30", fontSize: 12 }}
+                contentStyle={{ background: "#141721", border: "1px solid #2a2a30", fontSize: 12 }}
                 formatter={(_v, name, p) => {
                   const c = p.payload;
                   const isPk = name === "public key only";
@@ -196,32 +194,32 @@ export default function SecurityBoundaryTab({ initialized }) {
               <Scatter name="public key only" data={pkPoints} shape="circle" onClick={(p) => setSelected(p)}>
                 {pkPoints.map((p) => (
                   <ReCell key={`pk-${p.n}-${p.q}`} fill={p.colour}
-                    stroke={p.paper_demo ? "#e5e5ea" : undefined} strokeWidth={p.paper_demo ? 2 : 0} />
+                    stroke={p.paper_demo ? "#a4aec0" : undefined} strokeWidth={p.paper_demo ? 2 : 0} />
                 ))}
               </Scatter>
               <Scatter name="stolen key" data={stolenPoints} shape="triangle" onClick={(p) => setSelected(p)}>
                 {stolenPoints.map((p) => (
                   <ReCell key={`st-${p.n}-${p.q}`} fill={p.colour}
-                    stroke={p.paper_demo ? "#e5e5ea" : undefined} strokeWidth={p.paper_demo ? 2 : 0} />
+                    stroke={p.paper_demo ? "#a4aec0" : undefined} strokeWidth={p.paper_demo ? 2 : 0} />
                 ))}
               </Scatter>
             </ScatterChart>
           </ResponsiveContainer>
           <div className="flex gap-4 flex-wrap text-[11px] mt-1">
             <span className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-full inline-block" style={{ background: "#ef4444" }} />
+              <span className="w-3 h-3 rounded-full inline-block" style={{ background: "#d03b3b" }} />
               <span className="text-ink-500">public key alone broke it</span></span>
             <span className="flex items-center gap-1.5">
-              <span className="w-3 h-3 inline-block" style={{ background: "#fb923c", clipPath: "polygon(50% 0, 100% 100%, 0 100%)" }} />
+              <span className="w-3 h-3 inline-block" style={{ background: "#d95926", clipPath: "polygon(50% 0, 100% 100%, 0 100%)" }} />
               <span className="text-ink-500">stolen key broke it</span></span>
             <span className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-full inline-block" style={{ background: "#4ade80" }} />
+              <span className="w-3 h-3 rounded-full inline-block" style={{ background: "#0ca30c" }} />
               <span className="text-ink-500">attack ran, failed</span></span>
             <span className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-full inline-block" style={{ background: "#8a8a94" }} />
+              <span className="w-3 h-3 rounded-full inline-block" style={{ background: "#6f7a8d" }} />
               <span className="text-ink-500">unmeasured (timeout)</span></span>
             <span className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-full inline-block border-2" style={{ borderColor: "#e5e5ea" }} />
+              <span className="w-3 h-3 rounded-full inline-block border-2" style={{ borderColor: "#a4aec0" }} />
               <span className="text-ink-500">paper's demo parameters</span></span>
           </div>
           {cells.some((c) => c.paper_demo && c.outcome === "broke") && (
@@ -260,7 +258,7 @@ export default function SecurityBoundaryTab({ initialized }) {
                     {c.stolen_broke ? "▲ stolen broke" : "△ stolen"}
                   </span>
                 </div>
-                <div className="text-[10px] mt-1" style={{ color: c.stolen_helps ? "#fb923c" : "#6b6b76" }}>
+                <div className="text-[10px] mt-1" style={{ color: c.stolen_helps ? "#d95926" : "#6f7a8d" }}>
                   {c.stolen_helps ? "stolen key REQUIRED" : c.verdict}
                 </div>
               </button>
@@ -281,15 +279,15 @@ export default function SecurityBoundaryTab({ initialized }) {
           subtitle="Trapdoor size (m·⌈log2 q⌉/8 bytes) against the same bit axis — the paper's efficiency figures live at the low-bit end.">
           <ResponsiveContainer width="100%" height={250}>
             <ScatterChart margin={{ top: 10, right: 20, bottom: 28, left: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#2a2a30" />
-              <XAxis type="number" dataKey="x" stroke="#8a8a94" fontSize={11} domain={[0, "dataMax + 10"]}
-                label={{ value: "estimated security (bits)", position: "insideBottom", offset: -14, fill: "#8a8a94", fontSize: 11 }} />
-              <YAxis type="number" dataKey="y" stroke="#8a8a94" fontSize={11}
-                label={{ value: "trapdoor bytes", angle: -90, position: "insideLeft", fill: "#8a8a94", fontSize: 11 }} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--grid)" />
+              <XAxis type="number" dataKey="x" stroke="#6f7a8d" fontSize={11} domain={[0, "dataMax + 10"]}
+                label={{ value: "estimated security (bits)", position: "insideBottom", offset: -14, fill: "#6f7a8d", fontSize: 11 }} />
+              <YAxis type="number" dataKey="y" stroke="#6f7a8d" fontSize={11}
+                label={{ value: "trapdoor bytes", angle: -90, position: "insideLeft", fill: "#6f7a8d", fontSize: 11 }} />
               <ZAxis range={[80, 80]} />
-              <Tooltip contentStyle={{ background: "#16161a", border: "1px solid #2a2a30", fontSize: 12 }}
+              <Tooltip contentStyle={{ background: "#141721", border: "1px solid #2a2a30", fontSize: 12 }}
                 formatter={(v, _n, p) => [`n=${p.payload.n}, q=${p.payload.q}: ${v} bytes`, "trapdoor"]} />
-              <Scatter data={sized} fill="#5b9dff" />
+              <Scatter data={sized} fill="#3987e5" />
             </ScatterChart>
           </ResponsiveContainer>
         </Card>
@@ -330,7 +328,7 @@ export default function SecurityBoundaryTab({ initialized }) {
                     <td className="py-1.5 pr-3">{fmtBits(c.bits)}</td>
                     <td className="py-1.5 pr-3" style={{ color: outcomeOf(c).colour }}>{c.pk_outcome ?? c.outcome}</td>
                     <td className="py-1.5 pr-3">{c.pk_beta ?? "—"}</td>
-                    <td className="py-1.5 pr-3" style={{ color: STOLEN_COLOURS[c.stolen_outcome] ?? "#6b6b76" }}>
+                    <td className="py-1.5 pr-3" style={{ color: STOLEN_COLOURS[c.stolen_outcome] ?? "#6f7a8d" }}>
                       {c.stolen_outcome ?? "—"}</td>
                     <td className="py-1.5 pr-3">{c.stolen_beta ?? "—"}</td>
                     <td className="py-1.5 pr-3">
@@ -351,7 +349,7 @@ export default function SecurityBoundaryTab({ initialized }) {
         <Card title={`n=${selected.n}, q=${selected.q} — detail`}>
           <div className="text-xs space-y-3">
             <div className="text-ink-300">
-              verdict <span style={{ color: selected.stolen_helps ? "#fb923c" : outcomeOf(selected).colour }}>{selected.verdict}</span>
+              verdict <span style={{ color: selected.stolen_helps ? "#d95926" : outcomeOf(selected).colour }}>{selected.verdict}</span>
               {selected.gate_failed_checks?.length > 0 && <> · honest gate failed: <span className="mono">{selected.gate_failed_checks.join(", ")}</span></>}
               {selected.control && <> · control {selected.control.passed ? "PASSED (untrusted)" : "failed, as required"}</>}
               {selected.honest_trapdoor_s != null && <> · one Trapdoor call {selected.honest_trapdoor_s.toFixed(2)}s</>}

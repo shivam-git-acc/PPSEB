@@ -118,9 +118,9 @@ function framedSvg(innerSvg, width, height, title, caption) {
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height + top + bottom}" ` +
     `viewBox="0 0 ${width} ${height + top + bottom}" font-family="ui-sans-serif, system-ui, sans-serif">` +
     `<rect width="100%" height="100%" fill="${EXPORT_BG}"/>` +
-    `<text x="12" y="22" fill="#e5e5ea" font-size="14" font-weight="600">${escapeXml(title)}</text>` +
+    `<text x="12" y="22" fill="#a4aec0" font-size="14" font-weight="600">${escapeXml(title)}</text>` +
     `<g transform="translate(0, ${top})">${innerSvg}</g>` +
-    `<text x="12" y="${height + top + 22}" fill="#8a8a94" font-size="11">${escapeXml(caption)}</text>` +
+    `<text x="12" y="${height + top + 22}" fill="#6f7a8d" font-size="11">${escapeXml(caption)}</text>` +
     `</svg>`
   );
 }
@@ -145,23 +145,23 @@ function svgToPng(svgString, width, height, filename) {
 /** Plot A as a real SVG (the on-screen heatmap is HTML, which cannot be
  *  exported as a figure directly). Same data, same colour semantics. */
 function heatmapSvg(panel) {
-  const fills = { survives: "#1f5a37", break: "#6b2426", untrusted: "#6b4a12", error: "#3a3a42", skipped: "#26262c" };
+  const fills = { survives: "#1f5a37", break: "#7a3138", untrusted: "#6b4a12", error: "#3a3a42", skipped: "#26262c" };
   const { n_values: ns, J_values: Js, cells } = panel;
   const cw = 78, ch = 48, left = 56, top = 22;
   const width = left + Js.length * cw + 16;
   const height = top + ns.length * ch + 30;
   let body = "";
   Js.forEach((J, j) => {
-    body += `<text x="${left + j * cw + cw / 2}" y="15" fill="#8a8a94" font-size="11" text-anchor="middle">J=${J}</text>`;
+    body += `<text x="${left + j * cw + cw / 2}" y="15" fill="#6f7a8d" font-size="11" text-anchor="middle">J=${J}</text>`;
   });
   ns.forEach((n, i) => {
-    body += `<text x="${left - 8}" y="${top + i * ch + ch / 2 + 4}" fill="#8a8a94" font-size="11" text-anchor="end">n=${n}</text>`;
+    body += `<text x="${left - 8}" y="${top + i * ch + ch / 2 + 4}" fill="#6f7a8d" font-size="11" text-anchor="end">n=${n}</text>`;
     Js.forEach((J, j) => {
       const c = cells.find((x) => x.n === n && x.J === J);
       const outcome = c?.outcome ?? "skipped";
       const x = left + j * cw, y = top + i * ch;
       body += `<rect x="${x + 2}" y="${y + 2}" width="${cw - 4}" height="${ch - 4}" rx="4" fill="${fills[outcome]}"/>`;
-      body += `<text x="${x + cw / 2}" y="${y + 20}" fill="#e5e5ea" font-size="10" text-anchor="middle">${outcome}</text>`;
+      body += `<text x="${x + cw / 2}" y="${y + 20}" fill="#a4aec0" font-size="10" text-anchor="middle">${outcome}</text>`;
       if (c?.break_rate != null) {
         body += `<text x="${x + cw / 2}" y="${y + 34}" fill="#c8c8d0" font-size="10" text-anchor="middle">${c.break_rate.toFixed(2)} (${c.trusted_repeats}/${c.repeats_expected})</text>`;
       }
@@ -171,7 +171,7 @@ function heatmapSvg(panel) {
   Object.entries(fills).forEach(([k, f], idx) => {
     const lx = left + idx * 84;
     body += `<rect x="${lx}" y="${legendY - 9}" width="10" height="10" fill="${f}"/>`;
-    body += `<text x="${lx + 14}" y="${legendY}" fill="#8a8a94" font-size="10">${k}</text>`;
+    body += `<text x="${lx + 14}" y="${legendY}" fill="#6f7a8d" font-size="10">${k}</text>`;
   });
   return { svg: body, width, height };
 }
@@ -352,7 +352,7 @@ export default function BatchSweepTab({ initialized }) {
   };
 
   return (
-    <div className="space-y-5 max-w-5xl">
+    <div className="space-y-4">
       <Card
         title="Batch Sweep"
         subtitle="Run the end-to-end attack across a grid of configurations unattended, checkpointed to disk, then read the heatmap and conclusion in the morning"
@@ -700,21 +700,21 @@ export default function BatchSweepTab({ initialized }) {
                       <div ref={(el) => { plotBRefs.current[key] = el; }}>
                         <ResponsiveContainer width="100%" height={260}>
                           <LineChart margin={{ top: 8, right: 16, bottom: 24, left: 8 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#2a2a30" />
+                            <CartesianGrid strokeDasharray="3 3" stroke="var(--grid)" />
                             <XAxis type="number" dataKey="periods_back" allowDecimals={false}
                               domain={["dataMin", "dataMax"]}
-                              stroke="#8a8a94" fontSize={11}
-                              label={{ value: "periods back from compromise", position: "insideBottom", offset: -12, fill: "#8a8a94", fontSize: 11 }} />
-                            <YAxis stroke="#8a8a94" fontSize={11}
-                              label={{ value: "word_gs", angle: -90, position: "insideLeft", fill: "#8a8a94", fontSize: 11 }} />
-                            <Tooltip contentStyle={{ background: "#16161a", border: "1px solid #2a2a30", fontSize: 12 }} />
+                              stroke="#6f7a8d" fontSize={11}
+                              label={{ value: "periods back from compromise", position: "insideBottom", offset: -12, fill: "#6f7a8d", fontSize: 11 }} />
+                            <YAxis stroke="#6f7a8d" fontSize={11}
+                              label={{ value: "word_gs", angle: -90, position: "insideLeft", fill: "#6f7a8d", fontSize: 11 }} />
+                            <Tooltip contentStyle={{ background: "#141721", border: "1px solid #2a2a30", fontSize: 12 }} />
                             <Legend wrapperStyle={{ fontSize: 11 }} />
                             {series.map((s, i) => {
-                              const colour = ["#5b9dff", "#4ade80", "#f472b6", "#fbbf24"][i % 4];
+                              const colour = ["#3987e5", "#0ca30c", "#f472b6", "#fbbf24"][i % 4];
                               return [
                                 <Line key={`w${s.n}`} data={s.points} dataKey="word_gs_mean" name={`word_gs n=${s.n}`}
                                   stroke={colour} strokeWidth={2} dot={{ r: 3 }} isAnimationActive={false}>
-                                  <ErrorBar dataKey="word_gs_sd" width={4} strokeWidth={1} stroke="#8a8a94" />
+                                  <ErrorBar dataKey="word_gs_sd" width={4} strokeWidth={1} stroke="#6f7a8d" />
                                 </Line>,
                                 // The usability threshold depends on n (sigma scales with
                                 // dimension), so each n is compared against its OWN line.
@@ -743,15 +743,15 @@ export default function BatchSweepTab({ initialized }) {
                   <div ref={plotCRef}>
                   <ResponsiveContainer width="100%" height={260}>
                     <BarChart data={results.plots.plot_c} margin={{ top: 8, right: 16, bottom: 24, left: 8 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#2a2a30" />
-                      <XAxis dataKey="n" stroke="#8a8a94" fontSize={11}
-                        label={{ value: "lattice dimension n", position: "insideBottom", offset: -12, fill: "#8a8a94", fontSize: 11 }} />
-                      <YAxis domain={[0, 1]} stroke="#8a8a94" fontSize={11}
-                        label={{ value: "mean break_rate", angle: -90, position: "insideLeft", fill: "#8a8a94", fontSize: 11 }} />
-                      <Tooltip contentStyle={{ background: "#16161a", border: "1px solid #2a2a30", fontSize: 12 }} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--grid)" />
+                      <XAxis dataKey="n" stroke="#6f7a8d" fontSize={11}
+                        label={{ value: "lattice dimension n", position: "insideBottom", offset: -12, fill: "#6f7a8d", fontSize: 11 }} />
+                      <YAxis domain={[0, 1]} stroke="#6f7a8d" fontSize={11}
+                        label={{ value: "mean break_rate", angle: -90, position: "insideLeft", fill: "#6f7a8d", fontSize: 11 }} />
+                      <Tooltip contentStyle={{ background: "#141721", border: "1px solid #2a2a30", fontSize: 12 }} />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
                       {results.config.reducers.map((r, i) => (
-                        <Bar key={r} dataKey={r} name={`attacker: ${r}`} fill={["#5b9dff", "#f472b6"][i % 2]} isAnimationActive={false} />
+                        <Bar key={r} dataKey={r} name={`attacker: ${r}`} fill={["#3987e5", "#f472b6"][i % 2]} isAnimationActive={false} />
                       ))}
                     </BarChart>
                   </ResponsiveContainer>
@@ -766,17 +766,17 @@ export default function BatchSweepTab({ initialized }) {
                 <div ref={plotDRef}>
                 <ResponsiveContainer width="100%" height={260}>
                   <BarChart data={results.plots.plot_d} margin={{ top: 8, right: 16, bottom: 24, left: 8 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#2a2a30" />
-                    <XAxis dataKey="n" stroke="#8a8a94" fontSize={11}
-                      label={{ value: "lattice dimension n", position: "insideBottom", offset: -12, fill: "#8a8a94", fontSize: 11 }} />
-                    <YAxis allowDecimals={false} stroke="#8a8a94" fontSize={11}
-                      label={{ value: "cells", angle: -90, position: "insideLeft", fill: "#8a8a94", fontSize: 11 }} />
-                    <Tooltip contentStyle={{ background: "#16161a", border: "1px solid #2a2a30", fontSize: 12 }} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--grid)" />
+                    <XAxis dataKey="n" stroke="#6f7a8d" fontSize={11}
+                      label={{ value: "lattice dimension n", position: "insideBottom", offset: -12, fill: "#6f7a8d", fontSize: 11 }} />
+                    <YAxis allowDecimals={false} stroke="#6f7a8d" fontSize={11}
+                      label={{ value: "cells", angle: -90, position: "insideLeft", fill: "#6f7a8d", fontSize: 11 }} />
+                    <Tooltip contentStyle={{ background: "#141721", border: "1px solid #2a2a30", fontSize: 12 }} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Bar isAnimationActive={false} dataKey="broke" stackId="a" name="break" fill="#ef4444" />
-                    <Bar isAnimationActive={false} dataKey="survives" stackId="a" name="survives" fill="#4ade80" />
-                    <Bar isAnimationActive={false} dataKey="untrusted" stackId="a" name="untrusted" fill="#f59e0b" />
-                    <Bar dataKey="error" stackId="a" name="error/skipped" fill="#4b4b55" isAnimationActive={false} />
+                    <Bar isAnimationActive={false} dataKey="broke" stackId="a" name="break" fill="#d03b3b" />
+                    <Bar isAnimationActive={false} dataKey="survives" stackId="a" name="survives" fill="#0ca30c" />
+                    <Bar isAnimationActive={false} dataKey="untrusted" stackId="a" name="untrusted" fill="#fab219" />
+                    <Bar dataKey="error" stackId="a" name="error/skipped" fill="#2b3241" isAnimationActive={false} />
                   </BarChart>
                 </ResponsiveContainer>
                 </div>

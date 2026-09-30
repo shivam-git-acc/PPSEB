@@ -40,7 +40,7 @@ export default function HappyPathTab({ onTrace, initialized, maxPeriod }) {
   };
 
   return (
-    <div className="space-y-5 max-w-4xl">
+    <div className="space-y-4">
       <Card title="Happy Path" subtitle="Encrypt → PEKS → Trapdoor → Verify → retrieve → Decrypt">
         <div className="grid md:grid-cols-2 gap-4">
           <label className="block">

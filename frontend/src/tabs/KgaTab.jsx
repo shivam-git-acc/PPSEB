@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
-import { Card, Badge, PrimaryButton, ErrorBanner } from "../components/Section";
+import { Card, Badge, PrimaryButton, ErrorBanner, Value } from "../components/Section";
 
 const DICTIONARY = [
   "flu", "asthma", "diabetes", "hypertension", "migraine", "eczema",
@@ -56,7 +56,7 @@ export default function KgaTab({ onTrace, initialized, maxPeriod }) {
   };
 
   return (
-    <div className="space-y-5 max-w-4xl">
+    <div className="space-y-4">
       <Card title="Keyword-Guessing Attack" subtitle="Attacker view: only pk_rj, one captured trapdoor, and a dictionary.">
         <p className="text-sm text-ink-300 leading-relaxed">
           PPSEB claims resistance to keyword-guessing attacks, even quantum ones. But PEKS.Encrypt
@@ -114,11 +114,13 @@ export default function KgaTab({ onTrace, initialized, maxPeriod }) {
           {visibleGuesses >= result.guesses.length && (
             <div className="mt-4 pt-3 border-t border-ink-800">
               {result.recovered_keyword ? (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3 flex-wrap">
                   <Badge tone="red">BROKEN</Badge>
-                  <span className="text-sm">
-                    Keyword recovered: <b className="mono">{result.recovered_keyword.toUpperCase()}</b> — using only public data.
-                  </span>
+                  <span className="text-[13px] text-ink-300">Keyword recovered</span>
+                  <Value tone="break" className="!text-base tracking-wide">
+                    {result.recovered_keyword.toUpperCase()}
+                  </Value>
+                  <span className="text-[13px] text-ink-500">using only public data</span>
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
