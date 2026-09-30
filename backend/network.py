@@ -330,6 +330,13 @@ class NetworkSession:
         and R comes from `_attacker_view`, which carries neither secrets nor
         plaintext. Reaching FORWARD is rejected outright, and the result is
         checked to lie in L_perp_q(pk_i) before it is returned.
+
+        The delegated transform adjoins the q*e_j vectors before reducing (see
+        the sublattice-repair note in forward_sec._recover_candidate). Without
+        that step the R-product's columns lie in L_perp_q(pk_i) but span a
+        sublattice of index ~q^28, and the attack measures itself as far weaker
+        than it is -- at n=4, q=257 the reconstructed basis came out at
+        Gram-Schmidt norm ~30 instead of ~6 against an honest ~3.
         """
         if not 0 <= target_period_i < stolen_period < len(self.periods):
             raise ValueError(

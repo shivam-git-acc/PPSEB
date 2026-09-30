@@ -372,18 +372,33 @@ def test_l2_matches_wordpred_flag_present():
 
 
 def test_wordpred_disagreement_bannered():
-    """When the independent word-basis prediction disagrees with the
-    measured Level 2 outcome, the run is flagged for inspection (a
-    non-empty wordpred_disagreements list and a matching caveat) rather
-    than silently reported as a clean, fully-corroborated verdict. Seed 5
-    at n=4/J=2 is a known disagreement case (word_gs predicts unusable,
-    but the measured search broke anyway) -- see the PATCH 06 audit notes."""
+    """A disagreement between the independent word-basis prediction and the
+    measured Level 2 outcome must be SURFACED (in wordpred_disagreements, with
+    a matching caveat), never silently folded into a clean verdict.
+
+    This used to pin seed 5 as a known disagreement case. It no longer
+    disagrees, and that is a result rather than a broken test: the disagreement
+    was an artifact of the sublattice bug (see the 2026-09-30 audit note in
+    forward_sec._recover_candidate). The attacker was reducing a sublattice of
+    index ~q^28, so its word basis came out several times longer than the
+    honest doctor's and the norm proxy predicted "unusable" while the search
+    sometimes broke anyway. With the candidate repaired into a genuine basis
+    the attacker's word basis matches the honest one (ratios ~1.0 across every
+    seed scanned), and prediction and measurement agree.
+
+    So the assertion is on the MECHANISM, which holds either way.
+    """
     p = default_params()
     result = end_to_end_experiment(J=2, base_params=p, n=4, seed=5, reducer_name="bkz")
     disagreements = [r["period"] for r in result["rows"] if r.get("l2_matches_wordpred") is False]
-    assert disagreements, "expected seed=5 to reproduce a word-basis prediction disagreement"
     assert result["wordpred_disagreements"] == disagreements
-    assert any("word-basis" in c.lower() or "wordpred" in c.lower() for c in result["caveats"])
+    if disagreements:
+        assert any("word-basis" in c.lower() or "wordpred" in c.lower() for c in result["caveats"])
+    else:
+        # The repaired attacker's word basis is comparable to the honest one --
+        # which is WHY there is nothing to disagree about.
+        ratios = [r["word_ratio"] for r in result["rows"] if r.get("word_ratio") is not None]
+        assert ratios and all(x < e2e.WORD_FACTOR for x in ratios), ratios
 
 
 def test_negative_control_surfaced_per_run():
@@ -401,8 +416,13 @@ def test_negative_control_surfaced_per_run():
 
 @pytest.fixture(scope="module")
 def excluded_break_run():
-    """seed 24956, n=4, J=2, 8 records/period: a real run whose two measured
-    breaks have attacker/honest word ratios ~7.97 and ~3.15 (both over 3.0)."""
+    """seed 24956, n=4, J=2, 8 records/period.
+
+    Historical note: this seed was chosen because its two measured breaks had
+    attacker/honest word ratios ~7.97 and ~3.15, both over the 3.0 factor, so
+    both were excluded. After the sublattice repair (2026-09-30) its ratios are
+    ~1.2 and ~0.99 and nothing is excluded -- the inflated ratios were the bug,
+    not a property of the seed."""
     return end_to_end_experiment(
         J=2, base_params=default_params(), n=4, seed=24956, reducer_name="bkz", records_per_period=8,
     )
@@ -438,11 +458,26 @@ def test_trusted_break_requires_all_three_real_run(excluded_break_run):
 
 
 def test_excluded_break_list_has_ratios_real_run(excluded_break_run):
+    """An excluded break must carry the ratio that got it excluded, and a run
+    with nothing left to confirm must say so in its headline.
+
+    Both halves are asserted; which one applies depends on the measurement, and
+    since the sublattice repair it is the second (see the fixture's note). An
+    excluded break is never silently dropped and never counted as a survival.
+    """
     r = excluded_break_run
-    assert r["excluded_breaks"], "seed 24956 is a known case with excluded breaks"
     for e in r["excluded_breaks"]:
         assert e["word_ratio"] > e2e.WORD_FACTOR
-    assert "unconfirmed" in r["headline"].lower()
+    if r["broken_periods_l2"] and not r["trusted_break_periods"]:
+        assert "unconfirmed" in r["headline"].lower()
+    if not r["excluded_breaks"]:
+        # Nothing excluded because the repaired attacker's word basis is
+        # comparable to the honest doctor's -- assert that, rather than
+        # assuming it.
+        assert r["broken_periods_l2"], "a run with no breaks would make this vacuous"
+        assert set(r["trusted_break_periods"]) == set(r["broken_periods_l2"])
+        for row in r["rows"]:
+            assert row["word_ratio"] < e2e.WORD_FACTOR
 
 
 def test_word_decision_stability_high(excluded_break_run):

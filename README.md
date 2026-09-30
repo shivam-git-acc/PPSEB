@@ -115,12 +115,14 @@ Things to know before launching a long run:
 - **Trust gate, chosen when you read results (nothing is re-run).** *strict*
   (the headline) counts a break only if the negative controls failed and the
   attacker's word basis is within 3× the honest doctor's at that period.
-  *controls only* drops that word check. The word check is stable under
-  sampling noise (the Results view shows this), but it is a norm proxy, not a
-  test of search: in testing, breaks it excluded at ratios 6.8 and 8.0 still
-  passed a 50-decoy false-accept test. The Results view lists every excluded
+  *controls only* drops that word check. The Results view lists every excluded
   break with its ratio, and the conclusion won't call a run a negative result
   while any exist.
+  - The word check used to exclude breaks at ratios 6.8 and 8.0, which made it
+    look too strict — those breaks still passed a 50-decoy false-accept test.
+    That was the sublattice bug (below) inflating the attacker's basis, not a
+    flaw in the gate: since the repair the measured ratios are ~1.0 and nothing
+    is excluded. Results produced before 2026-09-30 carry the inflated ratios.
 - Plots A–D export as SVG/PNG, and the raw data as CSV/JSONL.
 
 ### n × q grid (Batch Sweep → "n × q grid")
@@ -194,6 +196,37 @@ cells explicitly, and says so plainly when there are none.
 - The bit axis is an *estimate* (root-Hermite fit; the lattice-estimator
   backend needs SageMath and is reported as unavailable rather than faked); the
   break/no-break outcome is *measured*. They are never merged.
+
+### Sublattice repair in the backward attack (2026-09-30)
+
+The stolen-key backward attack computes `P⁻¹ · sk_J`, where `P⁻¹` is the
+public R-product inverse taken **mod q**. Every column of that product lies in
+`L⊥_q(pk_i)` — the membership check passes — but the columns do not *generate*
+that lattice: as an integer matrix `P⁻¹` has a large determinant, and the
+candidate spans a sublattice of index about **q²⁸** at n=4, m=72. Reduction
+then works correctly on a far sparser lattice and returns honestly-long
+vectors, so the attack measured itself as much weaker than it is.
+
+The repair (`ppseb.linalg.q_ary_basis_from_generators`) adjoins the `q·e_j`
+vectors — free to anyone holding the public key — and extracts a genuine basis
+from the generating set. `ppseb.linalg.q_ary_index_log` reports the index, and
+is the one number that distinguishes "this attack is weak" from "this attack is
+reducing the wrong lattice".
+
+Measured effect at n=4, q=257 (honest basis ≈ 2.98):
+
+| | before | after |
+|---|---|---|
+| reconstructed basis, 1 period back | GS 41.97, index q²⁶ | GS 5.22, index 1 |
+| reconstructed basis, 2 periods back | GS 50.29, index q²⁸ | GS 6.26, index 1 |
+| attacker/honest word-basis ratio | 3.15 – 7.97 | 0.95 – 1.30 |
+| periods broken (8 seeds, J=2) | mixed, many excluded | [0, 1] at every seed |
+
+This strengthens Finding 2: the attacker's reconstructed earlier-period key is
+indistinguishable in quality from the honest doctor's, so forward security
+fails on its own terms rather than being borderline. **Every stolen-key result
+produced before this date understates the attacker**, including the wide
+boundary sweep; those runs need repeating before they are quoted.
 
 ### Network tab
 

@@ -89,7 +89,7 @@ import numpy as np
 from ppseb.hashes import H1, H1_inverse
 from ppseb.linalg import (
     centered_mod_q, fpylll_available, gram_schmidt_norm, lll_reduce, mat_inv_mod, mat_mod_mixed,
-    matrix_col_norm, safe_matmul, strong_reduce,
+    matrix_col_norm, q_ary_basis_from_generators, q_ary_index_log, safe_matmul, strong_reduce,
 )
 from ppseb.params import Params
 from ppseb.samplers import new_basis_del
@@ -339,7 +339,7 @@ def _lll_reducer(basis: np.ndarray) -> tuple[np.ndarray, str]:
 
 def _recover_candidate(
     P_inv_centered: np.ndarray, target: np.ndarray, pk_i: np.ndarray, q: int,
-    reducer=None,
+    reducer=None, stack_qi: bool = True,
 ) -> tuple[np.ndarray, np.ndarray, bool, float, float, str]:
     """The shared "attacker's move" (used by the main experiment and both
     scaling sweeps): balance the raw transform, then reduce it, and measure
@@ -363,7 +363,23 @@ def _recover_candidate(
         raise RuntimeError("ForwardSec: cand_trivial left L_perp_q(pk_i); this should never happen")
     trivial_norm = gram_schmidt_norm(cand_trivial)
 
-    cand_reduced, method = reducer(cand_trivial)
+    # SUBLATTICE REPAIR (audit, 2026-09-30). Every column of P^-1.sk_J lies in
+    # L_perp_q(pk_i) -- the membership check above passes -- but they do not
+    # GENERATE it: P^-1 is the R-product inverse taken MOD q, so as an integer
+    # matrix its determinant is huge and the columns span a sparse sublattice
+    # (measured index q^28 at n=4, m=72). Reducing THAT lattice returns
+    # honestly-long vectors (GS ~50 vs the honest key's ~3) and the attack
+    # fails -- not because the stolen key is useless, but because it was being
+    # pointed at the wrong lattice. The q*e_j vectors are computable by anyone
+    # holding the PUBLIC key, so adjoining them costs the attacker nothing and
+    # the union generates the full lattice. With the repair the same candidate
+    # reduces to GS ~6 and the attack succeeds.
+    #
+    # `stack_qi=False` keeps the old, sublattice-only path -- not as a default
+    # anywhere, only so an experiment can MEASURE the difference rather than
+    # assert it.
+    generators = cand_trivial if not stack_qi else q_ary_basis_from_generators(cand_trivial, q)
+    cand_reduced, method = reducer(generators)
     reduced_ok = bool(np.all(mat_mod_mixed(pk_i, cand_reduced, q) == 0))
     reduced_norm = gram_schmidt_norm(cand_reduced)
     return cand_trivial, cand_reduced, reduced_ok, trivial_norm, reduced_norm, method
