@@ -47,6 +47,7 @@ export const api = {
   boundaryStart: (body) => post("/boundary/start", body),
   boundaryStatus: (jobId) => get(`/boundary/status?job_id=${encodeURIComponent(jobId)}`),
   boundaryJobs: () => get("/boundary/jobs"),
+  proofAnalysis: () => get("/proof/analysis"),
   ledgerRun: (body) => post("/ledger/run", body),
   recoveryStart: (body) => post("/recovery/start", body),
   recoveryStatus: (id) => get(`/recovery/status?job_id=${encodeURIComponent(id)}`),

@@ -13,6 +13,7 @@ import PublicKeyBreakTab from "./tabs/PublicKeyBreakTab";
 import NetworkTab from "./tabs/NetworkTab";
 import RecoveryTab from "./tabs/RecoveryTab";
 import LedgerTab from "./tabs/LedgerTab";
+import ProofTab from "./tabs/ProofTab";
 
 /* Grouped so the nav reads as a story rather than ten equal buttons:
    how it works -> what is broken -> how far it goes. */
@@ -28,6 +29,7 @@ const GROUPS = [
     { id: "forward", label: "Forward Security" },
     { id: "pkbreak", label: "Public-Key" },
     { id: "ledger", label: "Ledger" },
+    { id: "proof", label: "Proof" },
   ] },
   { name: "Measurement", tabs: [
     { id: "recovery", label: "Recovery" },
@@ -140,6 +142,7 @@ export default function App() {
           {tab === "network" && <NetworkTab {...tabProps} />}
           {tab === "recovery" && <RecoveryTab {...tabProps} />}
           {tab === "ledger" && <LedgerTab {...tabProps} />}
+          {tab === "proof" && <ProofTab goTo={go} {...tabProps} />}
         </div>
       </main>
     </div>

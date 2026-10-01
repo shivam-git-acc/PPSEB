@@ -36,6 +36,8 @@ from __future__ import annotations
 import math
 from typing import Optional
 
+from ppseb.params import derived_m
+
 CLASSICAL_BIT_COST_PER_BETA = 0.292  # core-SVP, Becker-Ducas-Gama-Laarhoven
 QUANTUM_BIT_COST_PER_BETA = 0.265  # core-SVP, Laarhoven
 MIN_TRUSTWORTHY_BETA = 50
@@ -135,3 +137,46 @@ def gaussian_heuristic(n: int, q: int, m: int) -> float:
 def trapdoor_bytes(m: int, q: int) -> int:
     """PATCH 14 §4's size axis: m * ceil(log2 q) / 8."""
     return int(math.ceil(m * math.ceil(math.log2(q)) / 8))
+
+
+def estimate_lwe_bits(n: int, q: int, sigma: float, m: Optional[int] = None) -> dict:
+    """Cost of the primal lattice attack on LWE at (n, q, sigma).
+
+    Theorem 1 reduces ciphertext indistinguishability to DECISION-LWE, which is
+    a different problem from the short-basis/SIS question `estimate_bits`
+    answers for the trapdoor lattice, so it gets its own entry point rather
+    than quietly reusing that number. The instantiation is the same
+    root-Hermite fit and the same core-SVP cost model, with the target set to
+    the error norm sigma*sqrt(m) -- the quantity the primal attack has to reach
+    for the LWE sample to be distinguishable.
+
+    The provenance is carried in the result: where the fit is out of its
+    trustworthy range the bits come back as an UPPER BOUND rather than a
+    number, because at these dimensions the fit overstates difficulty and a
+    confident figure would be the wrong kind of precision.
+    """
+    m = m or derived_m(n, q)
+    target = sigma * math.sqrt(m)
+    est = estimate_bits(n, q, m, target_norm=target, sigma=sigma)
+    est["problem"] = "decision-LWE (primal)"
+    est["target_provenance"] = f"error norm sigma*sqrt(m) = {target:.1f}"
+    bits, upper = est.get("bits"), est.get("bits_upper_bound")
+    # Three distinct outcomes, kept distinct instead of collapsing to None:
+    #   a real beta            -> a number
+    #   beta below the fit's floor -> an UPPER bound (the fit overstates
+    #                             difficulty down here, so a point estimate
+    #                             would be false precision)
+    #   delta0 <= 1            -> the target is out of the fit's reach
+    #                             entirely: the primal attack does not succeed
+    #                             at any block size this backend covers, which
+    #                             is not a bit count and must not be rendered
+    #                             as one.
+    est["beyond_fit_reach"] = bool(est.get("required_delta0", 0) <= 1.0)
+    est["bits_effective"] = bits if bits is not None else upper
+    est["is_upper_bound"] = bits is None and upper is not None
+    if est["beyond_fit_reach"]:
+        est["bits_effective"] = None
+        est["note_reach"] = ("The primal attack does not reach the error norm at any block "
+                             "size this fit covers, so its cost is not quantified here -- "
+                             "that is a gap in the estimator, not a security claim.")
+    return est

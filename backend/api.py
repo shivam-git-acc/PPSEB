@@ -38,6 +38,7 @@ from attacks import nq_sweep
 from attacks import boundary
 from attacks import recovery
 from attacks import ledger
+from attacks import proof
 import network as network_sim
 from attacks import security_estimate
 from attacks import pk_demo
@@ -323,6 +324,14 @@ def api_attack_kga(req: KgaRequest):
         "guesses_tried": attack_result["guesses_tried"],
         "success": attack_result["recovered_keyword"] == req.secret_keyword,
     }
+    if result["success"]:
+        proof.record_evidence("kga", {
+            "summary": f"recovered the searched keyword {attack_result['recovered_keyword']!r} "
+                       f"from the public key, one captured trapdoor and a "
+                       f"{len(req.dictionary)}-word dictionary",
+            "detail": {"keyword": attack_result["recovered_keyword"],
+                       "dictionary": len(req.dictionary)},
+            "source": "KGA tab"})
     return envelope(result, combined_trace, params)
 
 
@@ -333,6 +342,13 @@ def api_attack_forward(req: ForwardRequest):
         raise HTTPException(422, f"h1_variant must be one of {H1_VARIANTS}")
     params = SESSION.params
     result = forward_sec_experiment(req.J, params, seed=req.seed, h1_variant=req.h1_variant)
+    broken = result.get("broken_periods") or result.get("broken_periods_l2") or []
+    proof.record_evidence("forward_security", {
+        "summary": (f"the R-transform recovered a usable earlier-period basis at period(s) "
+                    f"{broken}" if broken else
+                    "the R-transform produced no usable earlier-period basis in this run"),
+        "detail": {"broken_periods": broken, "J": req.J, "n": params.n, "q": params.q},
+        "source": "Forward Security tab"})
     return envelope(
         {k: v for k, v in result.items() if k != "trace"},
         result["trace"], params,
@@ -631,6 +647,13 @@ async def api_pk_demo_run(req: PkDemoRequest):
         n=req.n, q=req.q, seed=req.seed, records=req.records,
         dictionary=tuple(req.dictionary), beta=req.beta,
     )
+    proof.record_evidence("public_key_break", {
+        "summary": f"{result['attack']['recovered']}/{result['attack']['total']} disease tags "
+                   f"recovered at n={req.n}, q={req.q} from the public key alone "
+                   f"(BKZ block size {result['beta']})",
+        "detail": {"recovered": result["attack"]["recovered"], "total": result["attack"]["total"],
+                   "beta": result["beta"], "n": req.n, "q": req.q},
+        "source": "Public-Key tab"})
     params = Params(n=req.n, q=req.q, sigma=SESSION.params.sigma, l=SESSION.params.l, m=0)
     return envelope({k: v for k, v in result.items() if k != "trace"}, result["trace"], params)
 
@@ -826,8 +849,48 @@ async def api_ledger_run(req: LedgerRequest):
             queries=req.queries, plants=req.plants)
     except RuntimeError as e:
         raise HTTPException(400, str(e))
+    rep, pl, t1, t2 = result["replay"], result["plant"], result["tier1"], result["tier2"]
+    proof.record_evidence("replay", {
+        "summary": f"replayed trapdoor returned the doctor's own record(s) "
+                   f"{rep['replay_matched']}; a random trapdoor matched nothing",
+        "detail": {"identical": rep["identical"], "control_ok": rep["control_ok"]},
+        "source": "Ledger tab"})
+    proof.record_evidence("plant", {
+        "summary": f"crafted ciphertext matched {pl['searches']}/{pl['searches']} searches; "
+                   f"a random ciphertext matched none",
+        "detail": {"every": pl["planted_matches_every_search"],
+                   "control_clean": pl["control_matches_nothing"]},
+        "source": "Ledger tab"})
+    proof.record_evidence("leakage", {
+        "summary": f"co-access recovered {t1['partition_purity']['pure']}/"
+                   f"{t1['partition_purity']['groups']} groups exactly; frequency analysis "
+                   f"labelled {t2['accuracy']:.0%} vs {t2['baseline']['mean']:.0%} chance",
+        "detail": {"purity": t1["partition_purity"]["purity"], "accuracy": t2["accuracy"],
+                   "baseline": t2["baseline"]["mean"]},
+        "source": "Ledger tab"})
     params = Params(n=req.n, q=req.q, sigma=SESSION.params.sigma, l=SESSION.params.l, m=0)
     return envelope(result, [], params)
+
+
+
+# --------------------------------------------------------------------------
+# PATCH 22 — proof-level analysis: reduction loss + coverage map
+# --------------------------------------------------------------------------
+
+class ProofRequest(BaseModel):
+    grid: list[list[int]] = Field(default_factory=lambda: [list(c) for c in proof.DEFAULT_GRID])
+    sigma: float = Field(4.0, gt=0)
+
+
+@app.post("/api/proof/analysis")
+async def api_proof_analysis(req: ProofRequest):
+    result = proof.run_proof_analysis(grid=[tuple(c) for c in req.grid], sigma=req.sigma)
+    return {"result": result}
+
+
+@app.get("/api/proof/analysis")
+async def api_proof_analysis_get():
+    return {"result": proof.run_proof_analysis()}
 
 
 

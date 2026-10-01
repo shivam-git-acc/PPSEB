@@ -383,3 +383,54 @@ verifying well-formedness mitigates it even then.
 The framing: classical PEKS leaks the access pattern to one private server.
 Putting verification on a public chain broadcasts it to everyone — the paper's
 contribution is what makes this leakage public.
+
+### Proof Analysis tab
+
+Two attacks on the paper's Section 5 proof itself, rather than on the scheme.
+
+**A · Reduction loss.** Theorem 1 reduces ciphertext indistinguishability to
+LWE with an explicit loss — the challenger solves LWE with probability about
+p/2m, the 1/m coming from guessing the break-in period. Read as a guarantee
+that is `λ_scheme ≥ λ_LWE − log₂(2m)`, so the theorem gives away log₂(2m) bits.
+Measured over the lab's own grid:
+
+| n | q | m | LWE bits (est) | loss | guaranteed | verdict |
+|---|---|---|---|---|---|---|
+| 4 | 257 | 72 | ≤14.6 | 7.2 | **≤7.4** | negligible |
+| 8 | 257 | 144 | ≤14.6 | 8.2 | ≤6.4 | negligible |
+| 16 | 12289 | 448 | 29.8 | 9.8 | 20.0 | negligible |
+| 256 | 12289 | 7168 | — | 13.8 | — | unquantified |
+
+At the paper's own demonstration parameters the theorem guarantees **at most
+~7 bits** — roughly 2⁷ operations. Three things are kept distinct and are
+stated on the tab:
+
+- This is what the **theorem guarantees**, not what we measured to break. A
+  loose proof is not a broken scheme; the measured break is the separate
+  Public-Key result. The implication runs one way.
+- The figure is **negligible, not vacuous**. It is positive, so calling it
+  vacuous would overstate it; it gets its own band instead.
+- The LWE number is an **upper bound** wherever the root-Hermite fit is below
+  its trustworthy range, which makes the guarantee an upper bound too. Rows the
+  fit cannot reach at all report nothing rather than a zero — that is a gap in
+  the estimator, not a security claim.
+
+**B · Coverage map.** For each threat: the attack in this tool that
+demonstrates it is real, and the point in the paper's §5.2 game where the model
+cannot express it. The two columns are labelled **DEMONSTRATED** (measured
+here) and **ANALYSIS** (argued from the paper's text, not executed), so nobody
+reads the second as a run.
+
+The attack column is pulled from stored results — the Public-Key and Ledger
+tabs record what they measured, and the boundary sweep is read off disk. A
+threat with no stored run shows "run that tab" and links to it, **never a
+fabricated number**; `test_coverage_pulls_live_results` asserts an unpopulated
+row contains no digits at all.
+
+Of seven threats the game expresses one: the one it proves. Key recovery,
+offline keyword guessing, universal-ciphertext forgery, trapdoor replay and
+access-pattern leakage all fall outside it, and forward security appears in the
+game's setup but is never proven as its own statement. "No" means the game
+cannot express the threat — not that the scheme is unconditionally insecure;
+for key recovery specifically it is the game's premise (LWE hard) that fails at
+these parameters, not its reasoning.
