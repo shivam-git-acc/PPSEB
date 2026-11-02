@@ -1,0 +1,30 @@
+flowchart TD
+  Start([Open PPSEB Lab]) --> Params[Set parameters]
+  Params --> Init["POST /api/init"]
+  Init --> Valid{Parameters valid?}
+  Valid -- No --> Error[Show validation error]
+  Error --> Params
+  Valid -- Yes --> Root[Store root keys in session]
+  Root --> Choose{Choose activity}
+
+  Choose --> Happy[Happy Path]
+  Happy --> Encrypt["Encrypt keyword + create trapdoor"]
+  Encrypt --> Verify{Verify matches?}
+  Verify -- Yes --> Decrypt[Decrypt record for response]
+  Verify -- No --> Reject[Return no plaintext]
+  Decrypt --> Trace[Render result and trace]
+  Reject --> Trace
+
+  Choose --> KGA[KGA tab]
+  KGA --> Guess["Encrypt dictionary guesses with public data"]
+  Guess --> GuessMatch{Public Verify matches?}
+  GuessMatch -- No --> Guess
+  GuessMatch -- Yes --> Recovered[Display recovered keyword]
+
+  Choose --> Forward[Forward Security tab]
+  Forward --> Norms[Measure transformed-basis norms]
+  Norms --> Verdict[Derive verdict from measured evidence]
+
+  Choose --> Spec[Spec Defect tab]
+  Spec --> Paper[Run printed circular KeyExt]
+  Spec --> Corrected[Run corrected chain and check membership]

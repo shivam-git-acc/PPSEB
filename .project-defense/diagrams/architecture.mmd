@@ -1,0 +1,23 @@
+flowchart LR
+  subgraph UI["Browser: React + Vite"]
+    App["App / parameter state"]
+    Tabs["Analysis tabs"]
+    Client["frontend/src/api.js"]
+    App --> Tabs
+    Tabs --> Client
+  end
+
+  Proxy["Vite /api proxy"]
+  API["FastAPI app<br/>backend/api.py"]
+  Session["Single in-memory SESSION"]
+  Scheme["PPSEB primitives<br/>params, linalg, hashes,<br/>samplers, scheme, trace"]
+  Attacks["Attack modules<br/>KGA, forward security,<br/>spec defect, recovery"]
+  Jobs["Sweep / analysis jobs"]
+  Files[("Local JSONL results")]
+
+  Client --> Proxy --> API
+  API <--> Session
+  API --> Scheme
+  API --> Attacks
+  API --> Jobs --> Files
+  API -->|"result + trace + params"| Client

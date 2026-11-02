@@ -1,0 +1,25 @@
+sequenceDiagram
+  actor User
+  participant UI as React tab
+  participant Client as API client
+  participant Proxy as Vite proxy
+  participant API as FastAPI
+  participant Session as In-memory SESSION
+  participant Scheme as PPSEB primitives
+
+  User->>UI: Enter record, keyword and query keyword
+  UI->>Client: encryptSearch(request)
+  Client->>Proxy: POST /api/encrypt-search (JSON)
+  Proxy->>API: Forward to 127.0.0.1:8000
+  API->>Session: Read params, period keys, mu and PKE anchor
+  Session-->>API: Current period state
+  API->>Scheme: PEKS encrypt + generate trapdoor
+  Scheme-->>API: CT1, CT2, Trap, trace events
+  API->>Scheme: Verify(CT1, CT2, Trap)
+  Scheme-->>API: match and verifier output
+  API->>Scheme: Encrypt record; decrypt only when match
+  Scheme-->>API: Ciphertext and optional plaintext
+  API-->>Proxy: result + trace + params
+  Proxy-->>Client: JSON response
+  Client-->>UI: Resolve result or surface error
+  UI-->>User: Match/no-match, plaintext if matched, trace

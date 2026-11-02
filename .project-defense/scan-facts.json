@@ -1,0 +1,239 @@
+{
+  "repo_root": "D:\\College\\Programming\\RIS\\PPSEB",
+  "folder_structure": {
+    ".vscode/": {
+      "settings.json": "file"
+    },
+    "backend/": {
+      "api.py": "file",
+      "attacks/": {
+        "__init__.py": "file",
+        "boundary.py": "file",
+        "boundary_cell_worker.py": "file",
+        "end_to_end.py": "file",
+        "forward_sec.py": "file",
+        "kga.py": "file",
+        "ledger.py": "file",
+        "nq_cell_worker.py": "file",
+        "nq_sweep.py": "file",
+        "pk_demo.py": "file",
+        "proof.py": "file",
+        "recovery.py": "file",
+        "security_estimate.py": "file",
+        "spec_defect.py": "file"
+      },
+      "network.py": "file",
+      "ppseb/": {
+        "__init__.py": "file",
+        "gadget.py": "file",
+        "hashes.py": "file",
+        "linalg.py": "file",
+        "params.py": "file",
+        "samplers.py": "file",
+        "scheme.py": "file",
+        "trace.py": "file",
+        "trapgen.py": "file"
+      },
+      "requirements.txt": "file",
+      "sweep.py": "file",
+      "tests/": {
+        "__init__.py": "file",
+        "test_api.py": "file",
+        "test_boundary.py": "file",
+        "test_end_to_end.py": "file",
+        "test_forward_sec.py": "file",
+        "test_gadget.py": "file",
+        "test_hashes.py": "file",
+        "test_kga.py": "file",
+        "test_ledger.py": "file",
+        "test_network.py": "file",
+        "test_nq_sweep.py": "file",
+        "test_params_linalg.py": "file",
+        "test_pk_demo.py": "file",
+        "test_proof.py": "file",
+        "test_recovery.py": "file",
+        "test_samplers.py": "file",
+        "test_scheme.py": "file",
+        "test_spec_defect.py": "file",
+        "test_sweep.py": "file",
+        "test_trapgen.py": "file"
+      }
+    },
+    "CLAUDE.md": "file",
+    "context.md": "file",
+    "frontend/": {
+      "index.html": "file",
+      "package-lock.json": "file",
+      "package.json": "file",
+      "postcss.config.js": "file",
+      "src/": {
+        "api.js": "file",
+        "App.jsx": "file",
+        "components/": {},
+        "index.css": "file",
+        "main.jsx": "file",
+        "tabs/": {},
+        "utils.js": "file"
+      },
+      "tailwind.config.js": "file",
+      "vite.config.js": "file"
+    },
+    "graphify-out/": {
+      "cache/": {
+        "ast/": {},
+        "semantic/": {},
+        "stat-index.json": "file"
+      },
+      "cost.json": "file",
+      "graph.html": "file",
+      "graph.json": "file",
+      "GRAPH_REPORT.md": "file",
+      "manifest.json": "file"
+    },
+    "inconsistency.md": "file",
+    "PATCH-01-forward-security.md": "file",
+    "PATCH-02-threshold-and-scaling.md": "file",
+    "PATCH-03-scaling-confound.md": "file",
+    "PATCH-04-symmetric-tooling.md": "file",
+    "PATCH-05-end-to-end-attack.md": "file",
+    "PATCH-06-parameterize-and-every-period.md": "file",
+    "PATCH-07-nj-sweep.md": "file",
+    "PATCH-08-batch-sweep-tab.md": "file",
+    "PATCH-09-relative-word-check.md": "file",
+    "PATCH-10-mp12-gadget-trapdoor.md": "file",
+    "PATCH-13-fast-nq-sweep.md": "file",
+    "PATCH-14-security-boundary.md": "file",
+    "PATCH-15-wide-run-stolen-key.md": "file",
+    "PATCH-16-public-key-break-demo.md": "file",
+    "PATCH-18-network-simulation-tab.md": "file",
+    "PATCH-19-clean-recovery-story.md": "file",
+    "PATCH-21-ledger-attacks.md": "file",
+    "PATCH-22-proof-analysis.md": "file",
+    "README.md": "file",
+    "RIS-1.pdf": "file"
+  },
+  "languages": {
+    "Python": 92,
+    "Markdown": 43,
+    "JavaScript (React)": 41,
+    "JSON": 41,
+    "JavaScript": 10,
+    "HTML": 3,
+    "CSS": 2
+  },
+  "dependency_manifests": {
+    "frontend\\package.json": {
+      "manager": "npm",
+      "parsed": {
+        "name": "ppseb-lab-frontend",
+        "version": "0.1.0",
+        "dependencies": [
+          "react",
+          "react-dom",
+          "recharts"
+        ],
+        "devDependencies": [
+          "@vitejs/plugin-react",
+          "autoprefixer",
+          "postcss",
+          "tailwindcss",
+          "vite"
+        ],
+        "scripts": {
+          "dev": "vite",
+          "build": "vite build",
+          "preview": "vite preview"
+        },
+        "engines": null
+      }
+    },
+    ".kilo\\worktrees\\tricky-cord\\frontend\\package.json": {
+      "manager": "npm",
+      "parsed": {
+        "name": "ppseb-lab-frontend",
+        "version": "0.1.0",
+        "dependencies": [
+          "react",
+          "react-dom",
+          "recharts"
+        ],
+        "devDependencies": [
+          "@vitejs/plugin-react",
+          "autoprefixer",
+          "postcss",
+          "tailwindcss",
+          "vite"
+        ],
+        "scripts": {
+          "dev": "vite",
+          "build": "vite build",
+          "preview": "vite preview"
+        },
+        "engines": null
+      }
+    },
+    "backend\\requirements.txt": {
+      "manager": "pip",
+      "parsed": {
+        "dependencies": [
+          "numpy",
+          "sympy",
+          "fastapi",
+          "uvicorn[standard]",
+          "pydantic",
+          "pytest",
+          "httpx",
+          "fpylll",
+          "cysignals"
+        ]
+      }
+    },
+    ".kilo\\worktrees\\tricky-cord\\backend\\requirements.txt": {
+      "manager": "pip",
+      "parsed": {
+        "dependencies": [
+          "numpy",
+          "sympy",
+          "fastapi",
+          "uvicorn[standard]",
+          "pydantic",
+          "pytest",
+          "httpx",
+          "fpylll",
+          "cysignals"
+        ]
+      }
+    }
+  },
+  "frameworks": {
+    "frontend": [
+      "React"
+    ],
+    "backend": [
+      "FastAPI"
+    ],
+    "database": [],
+    "testing": [
+      "pytest"
+    ],
+    "other": [
+      "Vite"
+    ]
+  },
+  "readme_path": "README.md",
+  "test_dirs": [
+    ".kilo\\worktrees\\tricky-cord\\backend\\tests",
+    "backend\\tests"
+  ],
+  "config_files": [],
+  "entry_points": [
+    ".kilo\\worktrees\\tricky-cord\\frontend\\src\\main.jsx",
+    "frontend\\src\\main.jsx"
+  ],
+  "env_vars": [],
+  "run_commands": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  }
+}

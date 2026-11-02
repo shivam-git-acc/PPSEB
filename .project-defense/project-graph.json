@@ -1,0 +1,813 @@
+{
+  "project": {
+    "name": "PPSEB",
+    "purpose": "An interactive analysis lab for Xu et al. (2022) that implements a corrected PPSEB searchable-encryption scheme and demonstrates keyword-guessing, forward-security, and KeyExt specification findings.",
+    "stack": [
+      "React",
+      "FastAPI"
+    ],
+    "entry_points": [
+      {
+        "file": "frontend\\src\\main.jsx",
+        "type": "frontend",
+        "description": "Vite/React browser entry point."
+      }
+    ]
+  },
+  "frontend": {
+    "pages": [
+      {
+        "name": "Overview",
+        "details": { "type": "tab" },
+        "evidence": { "file": "frontend\\src\\App.jsx", "lines": [136, 136], "excerpt": "OverviewTab is rendered for the overview tab.", "status": "code-verified" }
+      },
+      {
+        "name": "Happy Path",
+        "details": { "type": "tab" },
+        "evidence": { "file": "frontend\\src\\App.jsx", "lines": [137, 137], "excerpt": "HappyPathTab is rendered for the happy-path tab.", "status": "code-verified" }
+      },
+      {
+        "name": "Security (Correctness)",
+        "details": { "type": "tab" },
+        "evidence": { "file": "frontend\\src\\App.jsx", "lines": [138, 138], "excerpt": "SecurityTab is rendered for the correctness tab.", "status": "code-verified" }
+      },
+      {
+        "name": "KGA",
+        "details": { "type": "tab" },
+        "evidence": { "file": "frontend\\src\\App.jsx", "lines": [139, 139], "excerpt": "KgaTab is rendered for the keyword-guessing attack tab.", "status": "code-verified" }
+      },
+      {
+        "name": "Forward Security",
+        "details": { "type": "tab" },
+        "evidence": { "file": "frontend\\src\\App.jsx", "lines": [140, 140], "excerpt": "ForwardSecTab is rendered for the forward-security analysis.", "status": "code-verified" }
+      },
+      {
+        "name": "Spec Defect",
+        "details": { "type": "tab" },
+        "evidence": { "file": "frontend\\src\\App.jsx", "lines": [141, 141], "excerpt": "SpecDefectTab is rendered for the KeyExt specification defect.", "status": "code-verified" }
+      },
+      {
+        "name": "Batch Sweep",
+        "details": { "type": "tab" },
+        "evidence": { "file": "frontend\\src\\App.jsx", "lines": [142, 142], "excerpt": "BatchSweepTab is rendered for long-running batch experiments.", "status": "code-verified" }
+      },
+      {
+        "name": "Security Boundary",
+        "details": { "type": "tab" },
+        "evidence": { "file": "frontend\\src\\App.jsx", "lines": [143, 143], "excerpt": "SecurityBoundaryTab is rendered for the security boundary analysis.", "status": "code-verified" }
+      },
+      {
+        "name": "Public-Key Break",
+        "details": { "type": "tab" },
+        "evidence": { "file": "frontend\\src\\App.jsx", "lines": [144, 144], "excerpt": "PublicKeyBreakTab is rendered for the public-key attack demo.", "status": "code-verified" }
+      },
+      {
+        "name": "Network",
+        "details": { "type": "tab" },
+        "evidence": { "file": "frontend\\src\\App.jsx", "lines": [145, 145], "excerpt": "NetworkTab is rendered for the staged network simulation.", "status": "code-verified" }
+      },
+      {
+        "name": "Recovery",
+        "details": { "type": "tab" },
+        "evidence": { "file": "frontend\\src\\App.jsx", "lines": [146, 146], "excerpt": "RecoveryTab is rendered for recovery analysis.", "status": "code-verified" }
+      },
+      {
+        "name": "Ledger",
+        "details": { "type": "tab" },
+        "evidence": { "file": "frontend\\src\\App.jsx", "lines": [147, 147], "excerpt": "LedgerTab is rendered for ledger-metadata attacks.", "status": "code-verified" }
+      },
+      {
+        "name": "Proof",
+        "details": { "type": "tab" },
+        "evidence": { "file": "frontend\\src\\App.jsx", "lines": [148, 148], "excerpt": "ProofTab is rendered for proof analysis.", "status": "code-verified" }
+      }
+    ],
+    "components": [
+      {
+        "name": "App",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\App.jsx",
+          "lines": [
+            44,
+            44
+          ],
+          "excerpt": "export default function App() { const [params, setParams] = useSt",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "ParamsBar",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\components\\ParamsBar.jsx",
+          "lines": [
+            9,
+            9
+          ],
+          "excerpt": "export default function ParamsBar({ params, setParams, onApply, applying,",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "ShapeTable",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\components\\ShapeTable.jsx",
+          "lines": [
+            1,
+            1
+          ],
+          "excerpt": "export default function ShapeTable({ shapeTable }) { if (!shapeTable) re",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "Box",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\ArchDiagram.jsx",
+          "lines": [
+            17,
+            17
+          ],
+          "excerpt": "function Box({ x, y, title, sub, tone = \"neutral\" })",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "Flow",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\ArchDiagram.jsx",
+          "lines": [
+            29,
+            29
+          ],
+          "excerpt": "function Flow({ d, label, lx, ly, dashed, tone = \"mute",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "ArchDiagram",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\ArchDiagram.jsx",
+          "lines": [
+            41,
+            41
+          ],
+          "excerpt": "export default function ArchDiagram() { return ( <svg viewBox=\"0 0 76",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "Heatmap",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\BatchSweepTab.jsx",
+          "lines": [
+            35,
+            35
+          ],
+          "excerpt": "function Heatmap({ panel }) { const { n_values: ns, J_v",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "ExportButtons",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\BatchSweepTab.jsx",
+          "lines": [
+            179,
+            179
+          ],
+          "excerpt": "function ExportButtons({ getSvg, filename }) { const exportAs",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "RechartsExport",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\BatchSweepTab.jsx",
+          "lines": [
+            199,
+            199
+          ],
+          "excerpt": "function RechartsExport({ containerRef, title, caption, filename",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "BatchSweepTab",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\BatchSweepTab.jsx",
+          "lines": [
+            212,
+            212
+          ],
+          "excerpt": "export default function BatchSweepTab({ initialized }) { const [view, setVi",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "ForwardSecTab",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\ForwardSecTab.jsx",
+          "lines": [
+            23,
+            23
+          ],
+          "excerpt": "export default function ForwardSecTab({ onTrace, initialized, params }) { c",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "HappyPathTab",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\HappyPathTab.jsx",
+          "lines": [
+            7,
+            7
+          ],
+          "excerpt": "export default function HappyPathTab({ onTrace, initialized, maxPeriod }) {",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "KgaTab",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\KgaTab.jsx",
+          "lines": [
+            10,
+            10
+          ],
+          "excerpt": "export default function KgaTab({ onTrace, initialized, maxPeriod }) {",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "Head",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\LedgerTab.jsx",
+          "lines": [
+            14,
+            14
+          ],
+          "excerpt": "function Head({ title, kind, children }) { return (",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "LedgerTab",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\LedgerTab.jsx",
+          "lines": [
+            25,
+            25
+          ],
+          "excerpt": "export default function LedgerTab({ initialized }) { const [records, se",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "Node",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\NetworkDiagram.jsx",
+          "lines": [
+            49,
+            49
+          ],
+          "excerpt": "function Node({ id, active, accent, sub }) { const n",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "NetworkDiagram",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\NetworkDiagram.jsx",
+          "lines": [
+            69,
+            69
+          ],
+          "excerpt": "export default function NetworkDiagram({ activeEdge, pulse, period, blobs, att",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "Panel",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\NetworkTab.jsx",
+          "lines": [
+            17,
+            17
+          ],
+          "excerpt": "function Panel({ title, note, children, tone }) { con",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "Row",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\NetworkTab.jsx",
+          "lines": [
+            30,
+            30
+          ],
+          "excerpt": "function Row({ label, children }) { return ( <d",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "AttackResult",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\NetworkTab.jsx",
+          "lines": [
+            42,
+            42
+          ],
+          "excerpt": "function AttackResult({ res, stale }) { const total = res.pe",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "NetworkTab",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\NetworkTab.jsx",
+          "lines": [
+            134,
+            134
+          ],
+          "excerpt": "export default function NetworkTab({ onTrace }) { const [options, setOpt",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "Tick",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\NqSweepPanel.jsx",
+          "lines": [
+            32,
+            32
+          ],
+          "excerpt": "function Tick({ ok }) { return <span className={ok ?",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "CellDetail",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\NqSweepPanel.jsx",
+          "lines": [
+            36,
+            36
+          ],
+          "excerpt": "function CellDetail({ cell }) { return ( <div classNam",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "NqSweepPanel",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\NqSweepPanel.jsx",
+          "lines": [
+            94,
+            94
+          ],
+          "excerpt": "export default function NqSweepPanel({ initialized }) { const [nList, setN",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "OverviewTab",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\OverviewTab.jsx",
+          "lines": [
+            31,
+            31
+          ],
+          "excerpt": "export default function OverviewTab({ goTo }) { return ( <div classNa",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "Verdict",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\ProofTab.jsx",
+          "lines": [
+            7,
+            7
+          ],
+          "excerpt": "function Verdict({ row }) { if (row.guaranteed_bits ==",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "ProofTab",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\ProofTab.jsx",
+          "lines": [
+            15,
+            15
+          ],
+          "excerpt": "export default function ProofTab({ goTo }) { const [r, setR] = useStat",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "Norms",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\PublicKeyBreakTab.jsx",
+          "lines": [
+            5,
+            5
+          ],
+          "excerpt": "function Norms({ norms }) { const rows = [ [\"latt",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "PublicKeyBreakTab",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\PublicKeyBreakTab.jsx",
+          "lines": [
+            30,
+            30
+          ],
+          "excerpt": "export default function PublicKeyBreakTab({ initialized }) { const [n, setN] =",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "Field",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\RecoveryTab.jsx",
+          "lines": [
+            15,
+            15
+          ],
+          "excerpt": "function Field({ label: text, value, onChange, ...rest",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "RecoveryTab",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\RecoveryTab.jsx",
+          "lines": [
+            23,
+            23
+          ],
+          "excerpt": "export default function RecoveryTab({ initialized, onTrace }) { const [re",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "NumberField",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\SecurityBoundaryTab.jsx",
+          "lines": [
+            39,
+            39
+          ],
+          "excerpt": "function NumberField({ label, value, onChange }) { return (",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "SecurityBoundaryTab",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\SecurityBoundaryTab.jsx",
+          "lines": [
+            47,
+            47
+          ],
+          "excerpt": "export default function SecurityBoundaryTab({ initialized }) { const [gridText, s",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "SecurityTab",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\SecurityTab.jsx",
+          "lines": [
+            5,
+            5
+          ],
+          "excerpt": "export default function SecurityTab({ onTrace, initialized, maxPeriod, para",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "SpecDefectTab",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\SpecDefectTab.jsx",
+          "lines": [
+            8,
+            8
+          ],
+          "excerpt": "export default function SpecDefectTab({ onTrace, initialized }) { const [pe",
+          "status": "code-verified"
+        }
+      }
+    ],
+    "state_management": [
+      {
+        "name": "App-level React state",
+        "details": { "library": "React useState/useEffect", "values": ["params", "initialized", "shapeTable", "maxPeriod", "active tab", "initError"] },
+        "evidence": { "file": "frontend\\src\\App.jsx", "lines": [44, 80], "excerpt": "App owns parameter, initialization, tab, and error state and calls api.init.", "status": "code-verified" }
+      }
+    ],
+    "api_calls": [
+      {
+        "name": "fetch:${BASE}${path}",
+        "details": {
+          "method": "POST",
+          "endpoint": "${BASE}${path}",
+          "client": "fetch"
+        },
+        "evidence": {
+          "file": "frontend\\src\\api.js",
+          "lines": [
+            4,
+            4
+          ],
+          "excerpt": "fetch(`${BASE}${path}`, { method: \"POST\", headers: { \"",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "fetch:${BASE}${path}",
+        "details": {
+          "method": "GET",
+          "endpoint": "${BASE}${path}",
+          "client": "fetch"
+        },
+        "evidence": {
+          "file": "frontend\\src\\api.js",
+          "lines": [
+            18,
+            18
+          ],
+          "excerpt": "fetch(`${BASE}${path}`); const data = await res.json().catch",
+          "status": "code-verified"
+        }
+      }
+    ]
+  },
+  "backend": {
+    "routes": [
+      {
+        "method": "GET",
+        "path": "/api/health",
+        "handler": "health",
+        "evidence": { "file": "backend\\api.py", "lines": [190, 191], "excerpt": "@app.get(\"/api/health\") def health():", "status": "code-verified" }
+      },
+      {
+        "method": "POST",
+        "path": "/api/init",
+        "handler": "init",
+        "evidence": { "file": "backend\\api.py", "lines": [195, 196], "excerpt": "@app.post(\"/api/init\") def init(req: InitRequest):", "status": "code-verified" }
+      },
+      {
+        "method": "POST",
+        "path": "/api/keyext",
+        "handler": "api_keyext",
+        "evidence": { "file": "backend\\api.py", "lines": [226, 227], "excerpt": "@app.post(\"/api/keyext\") def api_keyext(req: KeyExtRequest):", "status": "code-verified" }
+      },
+      {
+        "method": "POST",
+        "path": "/api/encrypt-search",
+        "handler": "api_encrypt_search",
+        "evidence": { "file": "backend\\api.py", "lines": [263, 264], "excerpt": "@app.post(\"/api/encrypt-search\") def api_encrypt_search(req: EncryptSearchRequest):", "status": "code-verified" }
+      },
+      {
+        "method": "POST",
+        "path": "/api/attack/kga",
+        "handler": "api_attack_kga",
+        "evidence": { "file": "backend\\api.py", "lines": [299, 300], "excerpt": "@app.post(\"/api/attack/kga\") def api_attack_kga(req: KgaRequest):", "status": "code-verified" }
+      },
+      {
+        "method": "POST",
+        "path": "/api/attack/forward",
+        "handler": "api_attack_forward",
+        "evidence": { "file": "backend\\api.py", "lines": [338, 339], "excerpt": "@app.post(\"/api/attack/forward\") def api_attack_forward(req: ForwardRequest):", "status": "code-verified" }
+      },
+      {
+        "method": "POST",
+        "path": "/api/attack/spec",
+        "handler": "api_attack_spec",
+        "evidence": { "file": "backend\\api.py", "lines": [442, 443], "excerpt": "@app.post(\"/api/attack/spec\") def api_attack_spec(req: SpecRequest):", "status": "code-verified" }
+      }
+    ],
+    "middleware": [],
+    "controllers": [],
+    "services": [
+      {
+        "name": "PPSEB scheme primitives",
+        "details": { "functions": ["Initialization", "KeyExt", "PEKS.Encrypt", "Trapdoor", "Verify", "Encrypt", "Decrypt"] },
+        "evidence": { "file": "backend\\ppseb\\scheme.py", "lines": [1, 4], "excerpt": "The seven scheme algorithms and their corrected implementations.", "status": "code-verified" }
+      },
+      {
+        "name": "Attack and measurement modules",
+        "details": { "modules": ["kga", "forward_sec", "spec_defect", "end_to_end", "boundary", "recovery", "ledger", "proof", "pk_demo"] },
+        "evidence": { "file": "backend\\api.py", "lines": [20, 37], "excerpt": "API imports the attack and analysis modules used by the lab.", "status": "code-verified" }
+      },
+      {
+        "name": "Network simulation",
+        "details": { "operations": ["new session", "record", "search", "advance period", "decrypt", "attack"] },
+        "evidence": { "file": "backend\\api.py", "lines": [714, 789], "excerpt": "Network simulation API endpoints manage a session and delegate operations.", "status": "code-verified" }
+      },
+      {
+        "name": "Long-running experiment jobs",
+        "details": { "families": ["sweep", "nq-sweep", "boundary", "recovery"] },
+        "evidence": { "file": "backend\\api.py", "lines": [482, 529], "excerpt": "Sweep API provides preflight, start, status, results, stop, jobs and export operations.", "status": "code-verified" }
+      }
+    ]
+  },
+  "data": {
+    "models": [],
+    "relationships": [],
+    "migrations": []
+  },
+  "auth": {
+    "strategy": "none",
+    "token_handling": "No authentication or token handling is implemented in the local single-user demo API; the service uses in-memory session state.",
+    "protected_routes": []
+  },
+  "user_flows": [
+    {
+      "name": "Initialize, search and retrieve a medical record",
+      "description": "A user initializes the toy parameter set, then submits a record, its keyword and a query keyword; the record is decrypted only when Verify accepts.",
+      "steps": [
+        { "actor": "user", "action": "Submit crypto parameters", "target": "React Parameters panel" },
+        { "actor": "frontend", "action": "POST parameters", "target": "/api/init" },
+        { "actor": "backend", "action": "Generate root keys and session values", "target": "PPSEB initialization" },
+        { "actor": "user", "action": "Submit record and keyword/query", "target": "Happy Path tab" },
+        { "actor": "frontend", "action": "POST record and keywords", "target": "/api/encrypt-search" },
+        { "actor": "backend", "action": "Encrypt, create trapdoor, verify, then conditionally decrypt", "target": "PPSEB scheme" }
+      ],
+      "evidence": { "file": "backend\\api.py", "lines": [263, 297], "excerpt": "The request encrypts and verifies, and decrypts the record only on a match.", "status": "code-verified" }
+    },
+    {
+      "name": "Demonstrate offline keyword guessing",
+      "description": "Create a trapdoor for a chosen keyword and test public PEKS ciphertexts for dictionary candidates.",
+      "steps": [
+        { "actor": "user", "action": "Choose a secret keyword and candidate dictionary", "target": "KGA tab" },
+        { "actor": "backend", "action": "Create the trapdoor with the session key", "target": "/api/attack/kga" },
+        { "actor": "backend", "action": "Encrypt each public guess and test it against the trapdoor", "target": "KGA attack" },
+        { "actor": "frontend", "action": "Display guesses, match and trace", "target": "KGA tab" }
+      ],
+      "evidence": { "file": "backend\\attacks\\kga.py", "lines": [30, 72], "excerpt": "The trace states the threat model and records each public guess/verification result.", "status": "code-verified" }
+    },
+    {
+      "name": "Compare printed and corrected KeyExt",
+      "description": "Run the paper version to expose circular references, then generate and check the corrected chain.",
+      "steps": [
+        { "actor": "user", "action": "Request the specification experiment", "target": "Spec Defect tab" },
+        { "actor": "backend", "action": "Attempt the printed Algorithm 2 lines and capture failures", "target": "run_paper_version" },
+        { "actor": "backend", "action": "Build the corrected key chain and check each period", "target": "run_corrected_version" },
+        { "actor": "frontend", "action": "Show errors, correction rationale and validity checks", "target": "Spec Defect tab" }
+      ],
+      "evidence": { "file": "backend\\attacks\\spec_defect.py", "lines": [83, 150], "excerpt": "Paper-version failures and corrected-period validity checks are emitted in a trace.", "status": "code-verified" }
+    }
+  ],
+  "data_flows": [
+    {
+      "name": "Happy-path encryption and retrieval",
+      "description": "The request is processed in one API operation; no database model is involved.",
+      "steps": [
+        { "from": "Happy Path form", "to": "frontend/src/api.js", "data": "record, keyword, query_keyword", "transform": "JSON POST request" },
+        { "from": "frontend/src/api.js", "to": "POST /api/encrypt-search", "data": "JSON request body", "transform": "fetch through Vite /api proxy" },
+        { "from": "POST /api/encrypt-search", "to": "PPSEB scheme functions", "data": "session keys, keywords, record bytes", "transform": "PEKS, trapdoor, Verify, record encryption/decryption" },
+        { "from": "PPSEB scheme functions", "to": "React tab", "data": "match, trace and optional decrypted record", "transform": "JSON response and UI state update" }
+      ],
+      "evidence": { "file": "backend\\api.py", "lines": [263, 297], "excerpt": "The handler runs PEKS, Trapdoor, Verify, record encryption and conditional decryption.", "status": "code-verified" }
+    },
+    {
+      "name": "KGA guess-and-test",
+      "description": "The attacker uses the public key, public parameter mu, a captured trapdoor and a candidate dictionary.",
+      "steps": [
+        { "from": "KGA tab", "to": "POST /api/attack/kga", "data": "secret keyword and dictionary", "transform": "JSON request" },
+        { "from": "API session", "to": "trapdoor generation", "data": "period key and secret keyword", "transform": "SamplePre / trapdoor" },
+        { "from": "captured trapdoor + public parameters", "to": "KGA guess loop", "data": "dictionary words", "transform": "PEKS encrypt then public Verify" },
+        { "from": "KGA guess loop", "to": "KGA tab", "data": "per-guess verdicts and recovered keyword", "transform": "trace/result JSON" }
+      ],
+      "evidence": { "file": "backend\\attacks\\kga.py", "lines": [51, 72], "excerpt": "Every dictionary candidate is publicly encrypted and tested against the captured trapdoor.", "status": "code-verified" }
+    }
+  ],
+  "risks": [
+    {
+      "description": "The API stores crypto keys and parameters in one process-global in-memory Session, so concurrent users would share/reset state; this is suitable only for the documented single-user local demo.",
+      "severity": "medium",
+      "evidence": { "file": "backend\\api.py", "lines": [78, 103], "excerpt": "Session owns one set of period keys and is instantiated once as SESSION.", "status": "code-verified" },
+      "mitigation": "Keep the API local and single-user, or move state into isolated per-user sessions before any multi-user deployment."
+    }
+  ],
+  "uncertainties": [
+    {
+      "question": "Will the API ever be exposed outside the local development environment?",
+      "context": "CORS allows all origins and the API has no authentication; the code comments frame it as a local analysis tool.",
+      "evidence": { "file": "backend\\api.py", "lines": [39, 47], "excerpt": "CORSMiddleware allows all origins; comment says local analysis tool, not internet-facing.", "status": "UNVERIFIED" },
+      "impact_if_wrong": "The operational security assumptions and recommendations would need to change if this API is deployed remotely."
+    }
+  ]
+}

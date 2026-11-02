@@ -1,0 +1,14 @@
+D:\College\Programming\RIS\PPSEB\CLAUDE.md
+D:\College\Programming\RIS\PPSEB\PATCH-01-forward-security.md
+D:\College\Programming\RIS\PPSEB\PATCH-02-threshold-and-scaling.md
+D:\College\Programming\RIS\PPSEB\PATCH-03-scaling-confound.md
+D:\College\Programming\RIS\PPSEB\PATCH-04-symmetric-tooling.md
+D:\College\Programming\RIS\PPSEB\PATCH-05-end-to-end-attack.md
+D:\College\Programming\RIS\PPSEB\PATCH-06-parameterize-and-every-period.md
+D:\College\Programming\RIS\PPSEB\PATCH-08-batch-sweep-tab.md
+D:\College\Programming\RIS\PPSEB\PATCH-09-relative-word-check.md
+D:\College\Programming\RIS\PPSEB\PATCH-10-mp12-gadget-trapdoor.md
+D:\College\Programming\RIS\PPSEB\README.md
+D:\College\Programming\RIS\PPSEB\backend\requirements.txt
+D:\College\Programming\RIS\PPSEB\frontend\index.html
+D:\College\Programming\RIS\PPSEB\RIS-1.pdf

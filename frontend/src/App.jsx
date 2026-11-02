@@ -14,6 +14,7 @@ import NetworkTab from "./tabs/NetworkTab";
 import RecoveryTab from "./tabs/RecoveryTab";
 import LedgerTab from "./tabs/LedgerTab";
 import ProofTab from "./tabs/ProofTab";
+import SecurityTab from "./tabs/SecurityTab";
 
 /* Grouped so the nav reads as a story rather than ten equal buttons:
    how it works -> what is broken -> how far it goes. */
@@ -21,6 +22,7 @@ const GROUPS = [
   { name: "Scheme", tabs: [
     { id: "overview", label: "Overview" },
     { id: "happy", label: "Happy Path" },
+    { id: "security", label: "Security (Correctness)" },
     { id: "network", label: "Network" },
   ] },
   { name: "Findings", tabs: [
@@ -133,6 +135,7 @@ export default function App() {
         <div className="mx-auto w-full max-w-[1400px] px-6 py-6">
           {tab === "overview" && <OverviewTab goTo={go} />}
           {tab === "happy" && <HappyPathTab {...tabProps} />}
+          {tab === "security" && <SecurityTab {...tabProps} />}
           {tab === "kga" && <KgaTab {...tabProps} />}
           {tab === "forward" && <ForwardSecTab {...tabProps} />}
           {tab === "spec" && <SpecDefectTab {...tabProps} />}

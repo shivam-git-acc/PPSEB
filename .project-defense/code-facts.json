@@ -1,0 +1,585 @@
+{
+  "repo_root": "D:\\College\\Programming\\RIS\\PPSEB",
+  "files_scanned": 143,
+  "express": {
+    "routes": [],
+    "middleware": []
+  },
+  "mongoose": {
+    "models": []
+  },
+  "python_orm": {
+    "models": []
+  },
+  "react": {
+    "components": [
+      {
+        "name": "App",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\App.jsx",
+          "lines": [
+            44,
+            44
+          ],
+          "excerpt": "export default function App() { const [params, setParams] = useSt",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "ParamsBar",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\components\\ParamsBar.jsx",
+          "lines": [
+            9,
+            9
+          ],
+          "excerpt": "export default function ParamsBar({ params, setParams, onApply, applying,",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "ShapeTable",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\components\\ShapeTable.jsx",
+          "lines": [
+            1,
+            1
+          ],
+          "excerpt": "export default function ShapeTable({ shapeTable }) { if (!shapeTable) re",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "Box",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\ArchDiagram.jsx",
+          "lines": [
+            17,
+            17
+          ],
+          "excerpt": "function Box({ x, y, title, sub, tone = \"neutral\" })",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "Flow",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\ArchDiagram.jsx",
+          "lines": [
+            29,
+            29
+          ],
+          "excerpt": "function Flow({ d, label, lx, ly, dashed, tone = \"mute",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "ArchDiagram",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\ArchDiagram.jsx",
+          "lines": [
+            41,
+            41
+          ],
+          "excerpt": "export default function ArchDiagram() { return ( <svg viewBox=\"0 0 76",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "Heatmap",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\BatchSweepTab.jsx",
+          "lines": [
+            35,
+            35
+          ],
+          "excerpt": "function Heatmap({ panel }) { const { n_values: ns, J_v",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "ExportButtons",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\BatchSweepTab.jsx",
+          "lines": [
+            179,
+            179
+          ],
+          "excerpt": "function ExportButtons({ getSvg, filename }) { const exportAs",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "RechartsExport",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\BatchSweepTab.jsx",
+          "lines": [
+            199,
+            199
+          ],
+          "excerpt": "function RechartsExport({ containerRef, title, caption, filename",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "BatchSweepTab",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\BatchSweepTab.jsx",
+          "lines": [
+            212,
+            212
+          ],
+          "excerpt": "export default function BatchSweepTab({ initialized }) { const [view, setVi",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "ForwardSecTab",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\ForwardSecTab.jsx",
+          "lines": [
+            23,
+            23
+          ],
+          "excerpt": "export default function ForwardSecTab({ onTrace, initialized, params }) { c",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "HappyPathTab",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\HappyPathTab.jsx",
+          "lines": [
+            7,
+            7
+          ],
+          "excerpt": "export default function HappyPathTab({ onTrace, initialized, maxPeriod }) {",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "KgaTab",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\KgaTab.jsx",
+          "lines": [
+            10,
+            10
+          ],
+          "excerpt": "export default function KgaTab({ onTrace, initialized, maxPeriod }) {",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "Head",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\LedgerTab.jsx",
+          "lines": [
+            14,
+            14
+          ],
+          "excerpt": "function Head({ title, kind, children }) { return (",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "LedgerTab",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\LedgerTab.jsx",
+          "lines": [
+            25,
+            25
+          ],
+          "excerpt": "export default function LedgerTab({ initialized }) { const [records, se",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "Node",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\NetworkDiagram.jsx",
+          "lines": [
+            49,
+            49
+          ],
+          "excerpt": "function Node({ id, active, accent, sub }) { const n",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "NetworkDiagram",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\NetworkDiagram.jsx",
+          "lines": [
+            69,
+            69
+          ],
+          "excerpt": "export default function NetworkDiagram({ activeEdge, pulse, period, blobs, att",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "Panel",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\NetworkTab.jsx",
+          "lines": [
+            17,
+            17
+          ],
+          "excerpt": "function Panel({ title, note, children, tone }) { con",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "Row",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\NetworkTab.jsx",
+          "lines": [
+            30,
+            30
+          ],
+          "excerpt": "function Row({ label, children }) { return ( <d",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "AttackResult",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\NetworkTab.jsx",
+          "lines": [
+            42,
+            42
+          ],
+          "excerpt": "function AttackResult({ res, stale }) { const total = res.pe",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "NetworkTab",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\NetworkTab.jsx",
+          "lines": [
+            134,
+            134
+          ],
+          "excerpt": "export default function NetworkTab({ onTrace }) { const [options, setOpt",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "Tick",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\NqSweepPanel.jsx",
+          "lines": [
+            32,
+            32
+          ],
+          "excerpt": "function Tick({ ok }) { return <span className={ok ?",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "CellDetail",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\NqSweepPanel.jsx",
+          "lines": [
+            36,
+            36
+          ],
+          "excerpt": "function CellDetail({ cell }) { return ( <div classNam",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "NqSweepPanel",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\NqSweepPanel.jsx",
+          "lines": [
+            94,
+            94
+          ],
+          "excerpt": "export default function NqSweepPanel({ initialized }) { const [nList, setN",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "OverviewTab",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\OverviewTab.jsx",
+          "lines": [
+            31,
+            31
+          ],
+          "excerpt": "export default function OverviewTab({ goTo }) { return ( <div classNa",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "Verdict",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\ProofTab.jsx",
+          "lines": [
+            7,
+            7
+          ],
+          "excerpt": "function Verdict({ row }) { if (row.guaranteed_bits ==",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "ProofTab",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\ProofTab.jsx",
+          "lines": [
+            15,
+            15
+          ],
+          "excerpt": "export default function ProofTab({ goTo }) { const [r, setR] = useStat",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "Norms",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\PublicKeyBreakTab.jsx",
+          "lines": [
+            5,
+            5
+          ],
+          "excerpt": "function Norms({ norms }) { const rows = [ [\"latt",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "PublicKeyBreakTab",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\PublicKeyBreakTab.jsx",
+          "lines": [
+            30,
+            30
+          ],
+          "excerpt": "export default function PublicKeyBreakTab({ initialized }) { const [n, setN] =",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "Field",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\RecoveryTab.jsx",
+          "lines": [
+            15,
+            15
+          ],
+          "excerpt": "function Field({ label: text, value, onChange, ...rest",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "RecoveryTab",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\RecoveryTab.jsx",
+          "lines": [
+            23,
+            23
+          ],
+          "excerpt": "export default function RecoveryTab({ initialized, onTrace }) { const [re",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "NumberField",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\SecurityBoundaryTab.jsx",
+          "lines": [
+            39,
+            39
+          ],
+          "excerpt": "function NumberField({ label, value, onChange }) { return (",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "SecurityBoundaryTab",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\SecurityBoundaryTab.jsx",
+          "lines": [
+            47,
+            47
+          ],
+          "excerpt": "export default function SecurityBoundaryTab({ initialized }) { const [gridText, s",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "SecurityTab",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\SecurityTab.jsx",
+          "lines": [
+            5,
+            5
+          ],
+          "excerpt": "export default function SecurityTab({ onTrace, initialized, maxPeriod, para",
+          "status": "code-verified"
+        }
+      },
+      {
+        "name": "SpecDefectTab",
+        "details": {
+          "type": "component"
+        },
+        "evidence": {
+          "file": "frontend\\src\\tabs\\SpecDefectTab.jsx",
+          "lines": [
+            8,
+            8
+          ],
+          "excerpt": "export default function SpecDefectTab({ onTrace, initialized }) { const [pe",
+          "status": "code-verified"
+        }
+      }
+    ],
+    "hooks": []
+  },
+  "api_calls": [
+    {
+      "name": "fetch:${BASE}${path}",
+      "details": {
+        "method": "POST",
+        "endpoint": "${BASE}${path}",
+        "client": "fetch"
+      },
+      "evidence": {
+        "file": "frontend\\src\\api.js",
+        "lines": [
+          4,
+          4
+        ],
+        "excerpt": "fetch(`${BASE}${path}`, { method: \"POST\", headers: { \"",
+        "status": "code-verified"
+      }
+    },
+    {
+      "name": "fetch:${BASE}${path}",
+      "details": {
+        "method": "GET",
+        "endpoint": "${BASE}${path}",
+        "client": "fetch"
+      },
+      "evidence": {
+        "file": "frontend\\src\\api.js",
+        "lines": [
+          18,
+          18
+        ],
+        "excerpt": "fetch(`${BASE}${path}`); const data = await res.json().catch",
+        "status": "code-verified"
+      }
+    }
+  ],
+  "auth": {
+    "jwt_verify": [],
+    "bcrypt_usage": [],
+    "password_handling": []
+  }
+}
