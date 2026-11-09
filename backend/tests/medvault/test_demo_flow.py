@@ -133,7 +133,7 @@ def test_the_nine_step_demo_flow():
 
 
 @pytest.mark.skipif(not ZKAuthorisation.available(),
-                    reason="Groth16 artefacts missing: run `node circuits/build.js`")
+                    reason="Groth16 prover unavailable: run `npm --prefix circuits ci` (the build itself is committed)")
 def test_step_4_rejects_a_reused_proof():
     """Step 4's proof half: accepted once, refused the second time (Property 22)."""
     world = build_world(MedVaultConfig(seed=42, zk_mode="groth16"))

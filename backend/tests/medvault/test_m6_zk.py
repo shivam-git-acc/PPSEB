@@ -22,7 +22,7 @@ from medvault.zk import FIELD, ConsentTree, ZKAuthorisation, ZKError, field_id, 
 
 requires_groth16 = pytest.mark.skipif(
     not ZKAuthorisation.available(),
-    reason="Groth16 artefacts missing: run `node circuits/build.js`",
+    reason="Groth16 prover unavailable: run `npm --prefix circuits ci` (the build itself is committed)",
 )
 
 
@@ -134,7 +134,7 @@ def test_signed_fallback_rejects_forged_and_missing_statements():
 @pytest.fixture(scope="module")
 def groth16_world():
     if not ZKAuthorisation.available():
-        pytest.skip("Groth16 artefacts missing: run `node circuits/build.js`")
+        pytest.skip("Groth16 prover unavailable: run `npm --prefix circuits ci` (the build itself is committed)")
     world = _world("groth16")
     first, _ = world.search("doctor_a", "diabetes")
     return world, first

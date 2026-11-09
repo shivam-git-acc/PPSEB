@@ -198,7 +198,7 @@ def test_demo_trace_endpoint_serves_golden_and_latest_separately(client, trace_p
 
 
 @pytest.mark.skipif(not ZKAuthorisation.available(),
-                    reason="Groth16 artefacts missing: run `node circuits/build.js`")
+                    reason="Groth16 prover unavailable: run `npm --prefix circuits ci` (the build itself is committed)")
 def test_session_auto_mode_uses_groth16_when_the_circuit_exists(client):
     api_core.SESSION["world"] = None
     body = client.post("/api/medvault/session/new",
