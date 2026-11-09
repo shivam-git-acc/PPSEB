@@ -28,6 +28,8 @@ import json
 import time
 from pathlib import Path
 
+import numpy as np
+
 from .config import MedVaultConfig, library_versions
 from .consent import ConsentError
 from .envelope import Scope
@@ -287,6 +289,19 @@ def measure_revocation_cost(config: MedVaultConfig, *, records: int = 20,
     return cost
 
 
+def measure_shape_check(config: MedVaultConfig, *, samples: int) -> dict:
+    """False-reject rate of the mode A′ shape check on honest PEKS ciphertexts."""
+    from ppseb.params import default_params
+    from ppseb.scheme import initialization
+
+    from .wellformed import measure_false_rejects
+
+    params = default_params()
+    state = initialization(params, np.random.default_rng(config.sub_seed("shape-check-keys")))
+    return measure_false_rejects(params, state["pk_r0"], state["mu"], samples=samples,
+                                 seed=config.sub_seed("shape-check-honest"))
+
+
 # --------------------------------------------------------------------------
 # Assembly
 # --------------------------------------------------------------------------
@@ -296,12 +311,22 @@ def run_repro(seed: int = 42, *, fast: bool = False) -> dict:
     config = MedVaultConfig(seed=seed)
     started = time.perf_counter()
 
-    attacks = run_all_attacks(config)
+    attacks = run_all_attacks(config, kga_rates=True, kga_seeds=1 if fast else 2)
     kga_success = {
         f"mode_{mode}": {attacker: attacks["kga"][f"mode_{mode}"][attacker]["success_rate_pct"]
                          for attacker in attacks["kga"][f"mode_{mode}"]}
         for mode in ("A", "B")
     }
+    kga_trials = {
+        f"mode_{mode}": {attacker: {k: cell[k] for k in (
+                             "successes", "trials", "wrong_keyword_matches",
+                             "own_ciphertext_failures", "success_rate_given_working_search_pct")}
+                         for attacker, cell in attacks["kga"][f"mode_{mode}"].items()}
+        for mode in ("A", "B")
+    }
+    kga_trials["control_unkeyed_hash"] = {
+        k: attacks["kga"]["control_unkeyed_hash"][k]
+        for k in ("successes", "trials", "success_rate_pct")}
     replay_plant = {
         f"mode_{mode}": {
             "replay": attacks["replay"][mode]["replay_ok"],
@@ -309,6 +334,19 @@ def run_repro(seed: int = 42, *, fast: bool = False) -> dict:
             "replay_reason": attacks["replay"][mode]["replay_reason"],
             "plant_reason": attacks["plant"][mode]["reason"],
         }
+        for mode in ("A", "B")
+    }
+
+    plant_checked = attacks["plant"]["A′"]
+    shape_check = {
+        "plant_mode_A_prime": {"plant": plant_checked["appears_in_search"],
+                               "plant_reason": plant_checked["reason"],
+                               "honest_entries_indexed": plant_checked["honest_entries_indexed"]},
+        "honest_false_rejects": measure_shape_check(config, samples=200 if fast else 1000),
+    }
+    retrieval_replay = {
+        f"mode_{mode}": {"replay": attacks["retrieval_replay"][mode]["replay_ok"],
+                         "replay_reason": attacks["retrieval_replay"][mode]["replay_reason"]}
         for mode in ("A", "B")
     }
 
@@ -338,7 +376,10 @@ def run_repro(seed: int = 42, *, fast: bool = False) -> dict:
             "elapsed_s": round(elapsed, 2),
         },
         "kga_success": kga_success,
+        "kga_trials": kga_trials,
         "replay_plant": replay_plant,
+        "retrieval_replay": retrieval_replay,
+        "shape_check": shape_check,
         "access_pattern": {
             f"mode_{mode}": {
                 "token_on_chain": attacks["access_pattern"][mode]["token_on_chain"],
@@ -385,7 +426,10 @@ def deterministic_headline(result: dict) -> dict:
     """
     return {
         "kga_success": result["kga_success"],
+        "kga_trials": result["kga_trials"],
         "replay_plant": result["replay_plant"],
+        "retrieval_replay": result["retrieval_replay"],
+        "shape_check": result["shape_check"],
         "access_pattern": result["access_pattern"],
         "storage_overhead": result["storage_overhead"],
         "lattice_params": result["meta"]["lattice_params"],
@@ -424,7 +468,12 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  replay        mode A {result['replay_plant']['mode_A']['replay']}  "
           f"mode B {result['replay_plant']['mode_B']['replay']}")
     print(f"  plant         mode A {result['replay_plant']['mode_A']['plant']}  "
+          f"mode A′ {result['shape_check']['plant_mode_A_prime']['plant']}  "
           f"mode B {result['replay_plant']['mode_B']['plant']}")
+    fr = result["shape_check"]["honest_false_rejects"]
+    print(f"  shape check   {fr['false_rejects']}/{fr['samples']} honest ciphertexts refused")
+    print(f"  fetch replay  mode A {result['retrieval_replay']['mode_A']['replay']}  "
+          f"mode B {result['retrieval_replay']['mode_B']['replay']}")
     zk, tree, gas = result["zk"], result["tree_evolution_norm"], result["gas_per_consent_event"]
     print(f"  zk            {zk.get('constraints')} constraints, verified={zk.get('verified')}")
     print(f"  key tree      nodes correct={tree['all_nodes_correct']}, "

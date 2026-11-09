@@ -10,7 +10,13 @@ import pytest
 
 from medvault.config import MedVaultConfig
 from medvault.envelope import Scope
-from medvault.harness import run_access_pattern, run_kga, run_plant, run_replay
+from medvault.harness import (
+    run_access_pattern,
+    run_kga,
+    run_plant,
+    run_replay,
+    run_retrieval_replay,
+)
 from medvault.service import build_world
 from tests.medvault.helpers import make_sandbox
 
@@ -59,6 +65,73 @@ def test_finding_replay_captured_trapdoor():
     assert hardened["first_ok"] is True
     assert hardened["replay_ok"] is False
     assert hardened["replay_reason"] == "reused_nonce"
+
+
+def test_finding_kga_as_a_rate_with_an_unkeyed_control():
+    """F1 measured as a rate, not one trial: every dictionary keyword is the
+    secret once. The unkeyed-hash control shows the key, not hashing, is the fix."""
+    from medvault.harness import KEYWORD_DICTIONARY, kga_matrix
+
+    matrix = kga_matrix(rates=True, seeds=1)
+    n = len(KEYWORD_DICTIONARY)
+    for attacker in ("outsider", "keyless_server", "insider"):
+        cell = matrix["mode_A"][attacker]
+        assert cell["trials"] == n and cell["wrong_keyword_matches"] == 0
+        # Every miss is a trapdoor that failed on its own keyword's ciphertext
+        # (a toy-parameter correctness failure the doctor suffers too), never a
+        # keyword the attack could not find while search worked.
+        assert cell["successes"] + cell["own_ciphertext_failures"] == n
+        assert cell["success_rate_given_working_search_pct"] == 100.0
+        assert cell["success_rate_pct"] >= 80.0
+    assert matrix["mode_B"]["outsider"]["successes"] == 0
+    assert matrix["mode_B"]["keyless_server"]["successes"] == 0
+    assert matrix["mode_B"]["insider"]["successes"] == n      # reported openly
+    control = matrix["control_unkeyed_hash"]
+    assert control["successes"] == control["trials"] == n
+
+
+def test_finding_replay_captured_retrieval():
+    """F3, retrieval half (deck finding 7: "replay it, pull the record").
+
+    Before: the same retrieval bytes hand the ciphertext over twice. After: the
+    second submission is rejected at the nonce gate. Neither path ever gives the
+    replaying party plaintext.
+    """
+    baseline = run_retrieval_replay("A")
+    assert baseline["legit_ok"] is True and baseline["replay_ok"] is True
+    assert baseline["replay_plaintext"] is None and baseline["replay_ciphertext_bytes"] > 0
+
+    hardened = run_retrieval_replay("B")
+    assert hardened["first_ok"] is True and hardened["legit_ok"] is True
+    assert hardened["replay_ok"] is False
+    assert hardened["replay_reason"] == "reused_nonce"
+
+
+def test_retrieval_gates_reject_forged_and_cross_used_signatures():
+    """Mode B retrieval: a wrong key, a tampered field, or a search signature
+    presented as a retrieval signature are all `bad_signature`, and a rejected
+    request does not burn the nonce."""
+    from dataclasses import replace
+
+    from medvault.crypto import ed25519_keypair
+
+    world = make_sandbox("B")
+    doctor = world.doctors["doctor_a"]
+    good = doctor.build_retrieval("rec-1", doctor.next_nonce(), world.ledger.now())
+    before = world.gateway.last_nonce("doctor_a")
+
+    stranger = ed25519_keypair(seed=b"\x07" * 32, label="TEST_KEY:stranger")
+    forged = replace(good, signature=stranger.sign(b"anything"))
+    tampered = replace(good, record_id="rec-other")
+    search_sig = doctor.build_request(world.index, "diabetes", good.nonce,
+                                      good.timestamp).signature
+    cross = replace(good, signature=search_sig)
+    for bad in (forged, tampered, cross):
+        result, _ = world.submit_retrieval(bad)
+        assert result["ok"] is False and result["reason"] == "bad_signature"
+    assert world.gateway.last_nonce("doctor_a") == before
+
+    assert world.submit_retrieval(good)[0]["ok"] is True
 
 
 def test_finding_access_pattern_is_public():

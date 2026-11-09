@@ -88,6 +88,20 @@ def entry_signing_message(token: bytes, record_id: str, epoch: int, doctor_id: s
             + doctor_id.encode("utf-8"))
 
 
+def retrieval_signing_message(record_id: str, nonce: int, epoch: int, timestamp: int) -> bytes:
+    """The exact byte string an Ed25519 retrieval signature covers.
+
+    Domain-separated from search messages, so a search signature can never be
+    presented as a retrieval signature or the other way round.
+    """
+    return (b"medvault-retrieve-v1"
+            + len(record_id.encode("utf-8")).to_bytes(2, "big")
+            + record_id.encode("utf-8")
+            + nonce.to_bytes(8, "big")
+            + epoch.to_bytes(4, "big")
+            + timestamp.to_bytes(8, "big"))
+
+
 def sign_search_request(signing_key, token: bytes, nonce: int, epoch: int,
                         timestamp: int) -> bytes:
     return signing_key.sign(search_signing_message(token, nonce, epoch, timestamp))
@@ -152,6 +166,24 @@ class SearchRequest:
     zk_proof: dict | None = None
     #: The keyword, present only on the doctor's side before the token is sent.
     keyword: str = ""
+
+
+@dataclass
+class RetrievalRequest:
+    """A doctor's signed request to fetch one record.
+
+    Deck finding 7 is "replay a captured trapdoor, pull the record": signing
+    only the search would leave the pull itself replayable, so a retrieval
+    carries its own signature and spends a nonce from the same per-doctor
+    counter as searches.
+    """
+
+    record_id: str
+    nonce: int
+    epoch: int
+    timestamp: int
+    signature: bytes
+    doctor_id: str
 
 
 @dataclass
@@ -331,8 +363,11 @@ class SearchNode:
     rejected in mode B, where it is on.
     """
 
-    def __init__(self, *, require_patient_signature: bool = True) -> None:
+    def __init__(self, *, require_patient_signature: bool = True,
+                 shape_check_params: Params | None = None) -> None:
         self.require_patient_signature = require_patient_signature
+        #: Mode A′: when set, PEKS payloads must pass `check_ciphertext_shape`.
+        self.shape_check_params = shape_check_params
         # index[doctor_id][epoch] = list[IndexEntry]
         self._index: dict[str, dict[int, list[IndexEntry]]] = {}
         # owner[doctor_id][epoch] = patient_id
@@ -374,6 +409,16 @@ class SearchNode:
                 return self._reject(entry, "bad_entry_signature")
             if owner is not None and owner != patient_id:
                 return self._reject(entry, "foreign_entry")
+
+        if self.shape_check_params is not None and entry.payload:
+            from .wellformed import check_ciphertext_shape  # avoid an import cycle
+
+            p = self.shape_check_params
+            ct1 = unpack_array(entry.payload[: 8 * p.l], (p.l,))
+            ct2 = unpack_array(entry.payload[8 * p.l:], (p.m, p.l))
+            verdict = check_ciphertext_shape(ct1, ct2, p)
+            if not verdict.ok:
+                return self._reject(entry, "malformed_ciphertext")
 
         self._owner.setdefault(entry.doctor_id, {}).setdefault(entry.epoch, patient_id)
         self._index.setdefault(entry.doctor_id, {}).setdefault(entry.epoch, []).append(entry)

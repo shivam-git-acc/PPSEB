@@ -54,9 +54,25 @@ line:
 
 ```bash
 cd backend
-python -m medvault.demo          # nine steps, writes results/demo_trace.json
+python -m medvault.demo          # nine steps; writes results/demo_trace.latest.json,
+                                 # and replaces the committed demo_trace.json only on a clean 9/9 pass
 python -m medvault.repro         # every evaluation table, writes results/repro.json
 ```
+
+The Demo tab's **Replay saved trace** reads the committed golden trace from the
+backend, and falls back to a copy bundled into the UI build when the backend is
+down or does not answer within 5 seconds.
+
+### MedVault-PQ: what each fix closes, and what it does not
+
+Numbering follows the mid-sem deck (findings 1–10).
+
+| Deck finding | Fix in MedVault-PQ | Closes | Does **not** close |
+| --- | --- | --- | --- |
+| 3 · Offline KGA | Mode B: keyed HMAC tokens, per doctor and epoch, never on-chain | Outsider and keyless-server guessing: 0 successes in every trial (`repro.json → kga_trials`). An unkeyed-hash control succeeds on every keyword, so the **key** is the fix, not the hashing | An authorised insider: 100 % inside their own scope, by design. Mode B replaces PPSEB's public tester rather than repairing it; the deck's PAEKS fix is S2 |
+| 3 · Offline KGA, baseline | Mode A (PPSEB, toy n = 4, q = 257) | — | Measured as a rate over every dictionary keyword: the attack finds the keyword on every trial where the honest search works. The misses are trapdoors that fail Verify on their own keyword's ciphertext, a toy-parameter correctness failure the doctor suffers as well (deck: "the margin law") |
+| 5 · Universal-ciphertext forgery | (a) Mode B: no universal entry can exist, since an HMAC entry matches exactly one token; entry writes must carry the owning patient's signature. (b) Mode A′: PPSEB plus a cheap CT₂ shape check on writes (`medvault/wellformed.py`), the stopgap the deck names | (a) Outsider planting, and any "matches everything" entry in mode B. (b) The paper's canonical `CT₂ = 0` forgery and every forgery with a short CT₂ column; 0 honest ciphertexts refused (`repro.json → shape_check`) | As the deck says, **a signature proves who sent an entry, not that it is well formed**: a registered but malicious patient can still poison their own index. The shape check is necessary, not sufficient: it cannot tell an honest uniform-looking CT₂ from a dishonest one. Closing finding 5 for an open, public ledger needs a ZK well-formedness proof (design only) |
+| 7 · Replay | Signed, nonce-bound, epoch-checked **search and retrieval** requests; one per-doctor counter covers both; signatures are domain-separated | Re-sending a captured search (`reused_nonce`) and re-sending a captured fetch to pull the record again (`reused_nonce`); a search signature cannot be presented as a fetch signature | Nothing beyond the doctor's own device: a stolen signing key is out of scope |
 
 Neither needs network access. The circuit in `circuits/build/` is generated and
 gitignored; rebuild it with `npm --prefix circuits install && npm --prefix

@@ -65,6 +65,9 @@ class MedVaultConfig:
     #: The interactive API selects auto (Groth16 when artifacts are available).
     zk_mode: str = "signed"
     ledger_mode: str = "memory"
+    #: Index mode A′: mode A plus the cheap CT2 shape check on entry writes
+    #: (deck finding 5's stopgap). Ignored in mode B, which has no PEKS entries.
+    ppseb_shape_check: bool = False
 
     def __post_init__(self) -> None:
         if self.index_mode not in INDEX_MODES:

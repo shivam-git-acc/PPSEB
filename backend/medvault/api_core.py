@@ -23,7 +23,8 @@ from .consent import ConsentError
 from . import demo as demo_module
 from .demo import FIGURES, collect_traces, load_report, record_run, run_demo
 from .envelope import Scope
-from .harness import ATTACKER_MODELS, run_access_pattern, run_kga, run_plant, run_replay
+from .harness import (ATTACKER_MODELS, run_access_pattern, run_kga, run_plant, run_replay,
+                      run_retrieval_replay)
 from .key_tree import KeyTree, KeyTreeConfig
 from .repro import run_repro
 from .service import DemoWorld, build_world
@@ -112,7 +113,7 @@ class EvilModeRequest(BaseModel):
 
 
 class AttackRequest(BaseModel):
-    kind: Literal["kga", "plant", "replay", "access_pattern", "all"] = "all"
+    kind: Literal["kga", "plant", "replay", "retrieval_replay", "access_pattern", "all"] = "all"
     mode: Literal["A", "B", "both"] = "both"
     attacker: Literal["outsider", "keyless_server", "insider"] = "outsider"
 
@@ -315,6 +316,8 @@ def attack_run(req: AttackRequest):
         result = {mode: run_plant(mode) for mode in modes}
     elif req.kind == "replay":
         result = {mode: run_replay(mode) for mode in modes}
+    elif req.kind == "retrieval_replay":
+        result = {mode: run_retrieval_replay(mode) for mode in modes}
     elif req.kind == "access_pattern":
         result = {mode: run_access_pattern(mode) for mode in modes}
     else:

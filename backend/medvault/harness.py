@@ -68,8 +68,12 @@ def build_sandbox(mode: str, config: MedVaultConfig | None = None, *,
 def run_kga(mode: str, *, attacker: str = "outsider",
             dictionary: tuple[str, ...] = KEYWORD_DICTIONARY,
             secret_keyword: str = SECRET_KEYWORD,
-            config: MedVaultConfig | None = None) -> dict:
+            config: MedVaultConfig | None = None,
+            world: DemoWorld | None = None) -> dict:
     """Run a dictionary attack against one index mode as one attacker model.
+
+    One trial: one secret keyword, one world. `success_rate_pct` here is 0 or
+    100 by construction; `kga_rate` is the function that reports a rate.
 
     `attacker` decides whether the attacker holds the per-doctor per-epoch index
     key:
@@ -79,7 +83,7 @@ def run_kga(mode: str, *, attacker: str = "outsider",
     """
     if attacker not in ATTACKER_MODELS:
         raise ValueError(f"attacker must be one of {ATTACKER_MODELS}")
-    world = build_sandbox(mode, config)
+    world = world or build_sandbox(mode, config)
     doctor = world.doctors["doctor_a"]
     capability = doctor.capability
     epoch = capability.epoch if capability else 0
@@ -102,8 +106,15 @@ def run_kga(mode: str, *, attacker: str = "outsider",
         return {
             "mode": mode,
             "attacker": attacker,
-            "success": recovered is not None,
-            "success_rate_pct": 100.0 if recovered is not None else 0.0,
+            # Success means the RIGHT keyword; a match on another keyword is a
+            # false positive, recorded separately rather than counted.
+            "success": recovered == secret_keyword,
+            "success_rate_pct": 100.0 if recovered == secret_keyword else 0.0,
+            "wrong_keyword": recovered is not None and recovered != secret_keyword,
+            # The attack encrypts the true keyword like any other guess, so a
+            # miss here means the trapdoor failed Verify on an honest ciphertext
+            # of its own keyword: the doctor's search would have missed too.
+            "own_ciphertext_failed": recovered is None,
             "recovered_keyword": recovered,
             "guesses_tried": baseline["guesses_tried"],
             "dictionary_size": len(dictionary),
@@ -139,8 +150,10 @@ def run_kga(mode: str, *, attacker: str = "outsider",
     return {
         "mode": mode,
         "attacker": attacker,
-        "success": recovered is not None,
-        "success_rate_pct": 100.0 if recovered is not None else 0.0,
+        "success": recovered == secret_keyword,
+        "success_rate_pct": 100.0 if recovered == secret_keyword else 0.0,
+        "wrong_keyword": recovered is not None and recovered != secret_keyword,
+        "own_ciphertext_failed": False,
         "recovered_keyword": recovered,
         "guesses_tried": len(guesses),
         "dictionary_size": len(dictionary),
@@ -155,13 +168,86 @@ def run_kga(mode: str, *, attacker: str = "outsider",
     }
 
 
-def kga_matrix(config: MedVaultConfig | None = None) -> dict:
-    """Every (mode, attacker) pair the evaluation table needs."""
+def kga_rate(mode: str, attacker: str, *, config: MedVaultConfig | None = None,
+             seeds: int = 2, dictionary: tuple[str, ...] = KEYWORD_DICTIONARY) -> dict:
+    """KGA success as a rate: every dictionary keyword as the secret, `seeds` worlds.
+
+    Each seed is a fresh world (fresh PPSEB keys in mode A, fresh index keys in
+    mode B). Trials = len(dictionary) × seeds. The first trial's evidence and
+    trace are kept so the UI still has something concrete to show.
+    """
+    base = config or MedVaultConfig(index_mode=mode if mode in ("A", "B") else "B")
+    successes, trials, wrong, broken, first = 0, 0, 0, 0, None
+    for k in range(seeds):
+        world = build_sandbox(mode, replace(base, seed=base.seed + k))
+        for secret in dictionary:
+            trial = run_kga(mode, attacker=attacker, dictionary=dictionary,
+                            secret_keyword=secret, config=base, world=world)
+            successes += trial["success"]
+            wrong += trial["wrong_keyword"]
+            broken += trial["own_ciphertext_failed"]
+            trials += 1
+            first = first or trial
+    working = trials - broken
+    return {**first, "secret_keyword": "every dictionary keyword",
+            "success": successes == trials, "successes": successes, "trials": trials,
+            "seeds": seeds, "success_rate_pct": round(100.0 * successes / trials, 2),
+            "wrong_keyword_matches": wrong,
+            # Mode A at toy parameters: some honest trapdoors fail Verify on
+            # their own keyword (deck: "the margin law"). Those trials are
+            # misses for the doctor as well, so the attack is also reported
+            # over the trials where search itself works.
+            "own_ciphertext_failures": broken,
+            "success_rate_given_working_search_pct":
+                round(100.0 * successes / working, 2) if working else None}
+
+
+def run_kga_unkeyed_control(*, dictionary: tuple[str, ...] = KEYWORD_DICTIONARY) -> dict:
+    """Control: a "fix" that hashes the keyword without a key.
+
+    token = SHA-256(normalise(keyword)). Anyone can hash a guess, so the
+    dictionary attack succeeds on every keyword. This is why mode B's token is
+    an HMAC under a per-doctor per-epoch key, not merely a hash.
+    """
+    from .crypto import sha256
+    from .search import normalize_keyword
+
+    successes = 0
+    for secret in dictionary:
+        captured = sha256(normalize_keyword(secret).encode("utf-8"))
+        recovered = next((g for g in dictionary
+                          if sha256(normalize_keyword(g).encode("utf-8")) == captured), None)
+        successes += recovered == secret
+    return {"mode": "unkeyed-hash control", "attacker": "outsider",
+            "successes": successes, "trials": len(dictionary),
+            "success_rate_pct": round(100.0 * successes / len(dictionary), 2),
+            "method": "SHA-256(keyword) with no key: a guess is hashed and compared"}
+
+
+def kga_matrix(config: MedVaultConfig | None = None, *, rates: bool = False,
+               seeds: int = 2) -> dict:
+    """Every (mode, attacker) pair the evaluation table needs.
+
+    `rates=False` (the live demo) runs one trial per cell. `rates=True`
+    (repro, tests) runs `kga_rate`. In mode A the three attacker models hold
+    the same material — Verify is public — so one rate is measured and reported
+    for all three rather than measuring the same attack three times.
+    """
+    if not rates:
+        return {
+            "mode_A": {attacker: run_kga("A", attacker=attacker, config=config)
+                       for attacker in ATTACKER_MODELS},
+            "mode_B": {attacker: run_kga("B", attacker=attacker, config=config)
+                       for attacker in ATTACKER_MODELS},
+        }
+    mode_a = kga_rate("A", "outsider", config=config, seeds=seeds)
     return {
-        "mode_A": {attacker: run_kga("A", attacker=attacker, config=config)
+        "mode_A": {attacker: {**mode_a, "attacker": attacker,
+                              "note": "same measurement for every model: Verify is public"}
                    for attacker in ATTACKER_MODELS},
-        "mode_B": {attacker: run_kga("B", attacker=attacker, config=config)
+        "mode_B": {attacker: kga_rate("B", attacker, config=config, seeds=seeds)
                    for attacker in ATTACKER_MODELS},
+        "control_unkeyed_hash": run_kga_unkeyed_control(),
     }
 
 
@@ -176,7 +262,16 @@ def run_plant(mode: str, *, config: MedVaultConfig | None = None) -> dict:
     `CT2 = 0` matches every trapdoor, so a single planted entry turns every
     search into a hit for the attacker's record id. Mode B's write path refuses
     the entry because it carries no patient signature.
+
+    Mode "A′" is mode A with the cheap CT2 shape check on writes
+    (`medvault.wellformed`): same scheme, same open submission, same planted
+    bytes; the entry is refused as `malformed_ciphertext`.
     """
+    checked = mode in ("A'", "A′")
+    if checked:
+        base = config or MedVaultConfig(index_mode="A")
+        config = replace(base, ppseb_shape_check=True)
+        mode = "A"
     world = build_sandbox(mode, config)
     epoch = world.ledger.current_epoch(world.patient_id)
 
@@ -188,11 +283,13 @@ def run_plant(mode: str, *, config: MedVaultConfig | None = None) -> dict:
         matched = world.search("doctor_a", "diabetes")[0]
         appears = "PLANTED" in matched.get("record_ids", [])
         return {
-            "mode": mode,
+            "mode": "A′" if checked else mode,
             "accepted": accepted,
             "reason": reason,
             "planted_record_id": "PLANTED",
             "appears_in_search": appears,
+            "honest_entries_indexed": len(world.node.entries("doctor_a", epoch))
+                                      - (1 if accepted else 0),
             "record_ids": matched.get("record_ids", []),
             "constructed_as": "CT1 = floor(q/2), CT2 = 0 (matches every trapdoor)",
             "params": {"n": index.params.n, "q": index.params.q},
@@ -250,6 +347,35 @@ def run_replay(mode: str, *, config: MedVaultConfig | None = None) -> dict:
     }
 
 
+def run_retrieval_replay(mode: str, *, config: MedVaultConfig | None = None) -> dict:
+    """Deck finding 7, second half: replay a captured *retrieval* request.
+
+    The doctor's legitimate fetch succeeds. The same request bytes are then
+    submitted again by whoever captured them. Mode A hands the ciphertext over
+    a second time (PPSEB authenticates nobody); mode B rejects it at the nonce
+    gate. The replaying party has no DEK, so success means ciphertext and the
+    access fact, never plaintext.
+    """
+    world = build_sandbox(mode, config)
+    doctor = world.doctors["doctor_a"]
+    record_id = "rec-001"
+    first, _ = world.retrieve("doctor_a", record_id)
+    captured = doctor.build_retrieval(record_id, doctor.next_nonce(), world.ledger.now())
+    legit, _ = world.submit_retrieval(captured)
+    replay, replay_trace = world.submit_retrieval(captured)
+    return {
+        "mode": mode,
+        "first_ok": first["ok"],
+        "legit_ok": legit["ok"],
+        "replay_ok": replay["ok"],
+        "replay_reason": replay["reason"],
+        "replay_plaintext": replay.get("plaintext"),
+        "replay_ciphertext_bytes": replay.get("ciphertext_bytes"),
+        "params": {"mode": mode, "nonce": captured.nonce, "epoch": captured.epoch},
+        "trace": replay_trace,
+    }
+
+
 # --------------------------------------------------------------------------
 # Finding 4 — public access pattern
 # --------------------------------------------------------------------------
@@ -282,15 +408,18 @@ def run_access_pattern(mode: str, *, config: MedVaultConfig | None = None) -> di
 # Everything at once
 # --------------------------------------------------------------------------
 
-def run_all_attacks(config: MedVaultConfig | None = None) -> dict:
+def run_all_attacks(config: MedVaultConfig | None = None, *, kga_rates: bool = False,
+                    kga_seeds: int = 2) -> dict:
     """The before/after table: three attacks, two modes, one code path."""
-    kga = kga_matrix(config)
+    kga = kga_matrix(config, rates=kga_rates, seeds=kga_seeds)
     replay = {mode: run_replay(mode, config=config) for mode in ("A", "B")}
-    plant = {mode: run_plant(mode, config=config) for mode in ("A", "B")}
+    plant = {mode: run_plant(mode, config=config) for mode in ("A", "A′", "B")}
     access = {mode: run_access_pattern(mode, config=config) for mode in ("A", "B")}
+    retrieval = {mode: run_retrieval_replay(mode, config=config) for mode in ("A", "B")}
     return {
         "kga": kga,
         "replay": replay,
+        "retrieval_replay": retrieval,
         "plant": plant,
         "access_pattern": access,
         "summary": {
@@ -299,7 +428,10 @@ def run_all_attacks(config: MedVaultConfig | None = None) -> dict:
             "kga_insider_pct": {mode: kga[f"mode_{mode}"]["insider"]["success_rate_pct"]
                                  for mode in ("A", "B")},
             "replay_succeeds": {mode: replay[mode]["replay_ok"] for mode in ("A", "B")},
-            "plant_succeeds": {mode: plant[mode]["appears_in_search"] for mode in ("A", "B")},
+            "retrieval_replay_succeeds": {mode: retrieval[mode]["replay_ok"]
+                                          for mode in ("A", "B")},
+            "plant_succeeds": {mode: plant[mode]["appears_in_search"]
+                               for mode in ("A", "A′", "B")},
             "token_on_chain": {mode: access[mode]["token_on_chain"] for mode in ("A", "B")},
         },
     }

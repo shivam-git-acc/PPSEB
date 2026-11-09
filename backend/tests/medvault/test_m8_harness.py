@@ -69,7 +69,8 @@ def test_run_all_attacks_summary_is_the_before_after_table():
     assert summary["kga_outsider_pct"] == {"A": 100.0, "B": 0.0}
     assert summary["kga_insider_pct"] == {"A": 100.0, "B": 100.0}
     assert summary["replay_succeeds"] == {"A": True, "B": False}
-    assert summary["plant_succeeds"] == {"A": True, "B": False}
+    assert summary["plant_succeeds"] == {"A": True, "A′": False, "B": False}
+    assert summary["retrieval_replay_succeeds"] == {"A": True, "B": False}
     assert summary["token_on_chain"] == {"A": True, "B": False}
 
 
@@ -82,7 +83,8 @@ def test_repro_writes_json_with_every_required_section(tmp_path):
     path = repro.write_results(result, tmp_path / "repro.json")
     loaded = json.loads(Path(path).read_text(encoding="utf-8"))
 
-    for key in ("meta", "kga_success", "replay_plant", "access_pattern",
+    for key in ("meta", "kga_success", "kga_trials", "replay_plant", "retrieval_replay",
+                "shape_check", "access_pattern",
                 "search_latency_ms", "storage_overhead", "revocation_cost",
                 "pir", "zk", "tree_evolution_norm", "gas_per_consent_event"):
         assert key in loaded

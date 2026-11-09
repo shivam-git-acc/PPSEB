@@ -6,11 +6,12 @@ import { useOp, TraceCard, Verdict } from "../../components/medvault/shared";
 const ATTACKS = [
   ["Keyword-guessing", "offline dictionary attack on the public key"],
   ["Ciphertext plant", "an entry that matches every search"],
-  ["Replay", "re-send a captured request"],
+  ["Replay (search)", "re-send a captured search request"],
+  ["Replay (retrieval)", "re-send a captured fetch to pull the record again"],
   ["Access pattern", "what the ledger reveals"],
 ];
 
-/* The harness reports each attack in its own shape. This turns all four into
+/* The harness reports each attack in its own shape. This turns all five into
    (baseline, hardened, did the hardened path hold?) so the table can be read
    at a glance without pretending the four measurements are identical. */
 function attackRows(results) {
@@ -29,6 +30,11 @@ function attackRows(results) {
       b: `replay accepted: ${results.replay?.B?.replay_ok}`,
       held: results.replay?.B?.replay_ok === false },
     { name: ATTACKS[3][0], hint: ATTACKS[3][1],
+      a: `ciphertext handed over again: ${results.retrieval_replay?.A?.replay_ok}`,
+      b: `handed over again: ${results.retrieval_replay?.B?.replay_ok}` +
+         (results.retrieval_replay?.B?.replay_reason ? ` (${results.retrieval_replay.B.replay_reason})` : ""),
+      held: results.retrieval_replay?.B?.replay_ok === false },
+    { name: ATTACKS[4][0], hint: ATTACKS[4][1],
       a: `token on chain: ${results.access_pattern?.A?.token_on_chain}`,
       b: `token on chain: ${results.access_pattern?.B?.token_on_chain}`,
       held: results.access_pattern?.B?.token_on_chain === false },

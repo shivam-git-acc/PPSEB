@@ -27,11 +27,13 @@ from ppseb.trace import Trace
 from .consent import ConsentLedger
 from .crypto import VerifyKey
 from .search import (
+    RetrievalRequest,
     SearchIndex,
     SearchNode,
     SearchRequest,
     SearchResult,
     compute_commitment,
+    retrieval_signing_message,
     verify_search_signature,
 )
 
@@ -196,17 +198,40 @@ class Gateway:
                             trace=trace.to_list())
 
     # -- retrieval --------------------------------------------------------
-    def authorize_retrieval(self, doctor_id: str, record_id: str, epoch: int
-                            ) -> RetrievalAuthorisation:
-        """A retrieval needs a live grant at the current epoch, in scope."""
+    def authorize_retrieval(self, req: RetrievalRequest) -> RetrievalAuthorisation:
+        """Gate one record fetch.
+
+        Both modes need a live grant at the current epoch, in scope. Mode B also
+        checks the doctor's signature and spends a nonce from the same counter
+        as searches, so a captured retrieval cannot be replayed (deck finding 7).
+        Mode A keeps PPSEB's behaviour: no requester authentication. As with
+        search, the nonce is committed only after every gate passes.
+        """
+        gates = GATE_POLICY[self.mode]
+        if "signature" in gates:
+            verify_key = self._resolve_key(req.doctor_id)
+            message = retrieval_signing_message(req.record_id, req.nonce, req.epoch,
+                                                req.timestamp)
+            if verify_key is None or not verify_key.verify(req.signature, message):
+                return RetrievalAuthorisation(False, "bad_signature",
+                                              f"retrieval of {req.record_id} "
+                                              f"for {req.doctor_id}")
         current_epoch = self.ledger.current_epoch(self.patient_id)
-        if epoch != current_epoch:
+        if req.epoch != current_epoch:
             return RetrievalAuthorisation(False, "stale_epoch",
-                                          f"capability epoch {epoch}, "
+                                          f"capability epoch {req.epoch}, "
                                           f"patient epoch {current_epoch}")
-        if not self.ledger.is_authorized(doctor_id, record_id):
+        if "nonce" in gates:
+            last = self.last_nonce(req.doctor_id)
+            if req.nonce <= last:
+                return RetrievalAuthorisation(False, "reused_nonce",
+                                              f"nonce {req.nonce} <= last accepted {last}")
+        if not self.ledger.is_authorized(req.doctor_id, req.record_id):
             return RetrievalAuthorisation(False, "out_of_scope",
-                                          f"{record_id} is not in {doctor_id}'s scope")
+                                          f"{req.record_id} is not in "
+                                          f"{req.doctor_id}'s scope")
+        if "nonce" in gates:
+            self._last_nonce[req.doctor_id] = req.nonce
         return RetrievalAuthorisation(True, "authorized")
 
     def reset_nonces(self) -> None:

@@ -60,12 +60,14 @@ from .kem import KEMWrapper, get_kem_wrapper
 from .merkle import MerkleProofStep, MerkleTree
 from .search import (
     ModeAIndex,
+    RetrievalRequest,
     SearchIndex,
     SearchNode,
     SearchRequest,
     SearchResult,
     build_mode,
     normalize_keyword,
+    retrieval_signing_message,
     sign_search_request,
 )
 
@@ -161,6 +163,18 @@ class DoctorAgent:
         self.last_request = request
         return request
 
+    def build_retrieval(self, record_id: str, nonce: int, timestamp: int) -> RetrievalRequest:
+        """Sign a request to fetch one record (domain-separated from search)."""
+        if self.capability is None:
+            raise ConsentError("no_capability",
+                               f"{self.doctor_id} holds no capability to retrieve with")
+        epoch = self.capability.epoch
+        signature = self.signing_key.sign(
+            retrieval_signing_message(record_id, nonce, epoch, timestamp))
+        return RetrievalRequest(record_id=record_id, nonce=nonce, epoch=epoch,
+                                timestamp=timestamp, signature=signature,
+                                doctor_id=self.doctor_id)
+
     def public_view(self) -> dict:
         return {
             "doctor_id": self.doctor_id,
@@ -192,7 +206,11 @@ class DemoWorld:
         self.random = (SeededRandomSource(self._seed_bytes("demo-rng"))
                        if self.config.deterministic else None)
         self.store = BlobStore(random_source=self.random)
-        self.node = SearchNode(require_patient_signature=(self.mode == "B"))
+        self.node = SearchNode(
+            require_patient_signature=(self.mode == "B"),
+            shape_check_params=(self.params if self.mode == "A"
+                                and self.config.ppseb_shape_check else None),
+        )
         self.index = self._build_index()
         self.gateway = Gateway(
             ledger=self.ledger, search_node=self.node, index=self.index,
@@ -623,13 +641,39 @@ class DemoWorld:
         agent = self.doctors.get(doctor_id)
         if agent is None or agent.capability is None:
             return self._fail(trace, "no_capability", doctor_id, record_id)
+        request = agent.build_retrieval(record_id, agent.next_nonce(), self.ledger.now())
+        trace.note(
+            f"{doctor_id} signs a retrieval request",
+            detail="Ed25519 over (record id, nonce, epoch, timestamp), domain-separated "
+                   "from search; the nonce comes from the same counter as searches.",
+            data={"nonce": request.nonce, "epoch": request.epoch, "mode": self.mode},
+            algo="RetrievalRequest",
+        )
+        return self._retrieve(request, trace, decrypt=True)
+
+    def submit_retrieval(self, request: RetrievalRequest) -> tuple[dict, list[dict]]:
+        """Submit an already-built retrieval — how the replay attack re-sends one.
+
+        The replaying party holds no DEK, so this path never decrypts: success
+        means the ciphertext was handed over, which is exactly what deck finding
+        7 says the attacker gets.
+        """
+        return self._retrieve(request, Trace(), decrypt=False)
+
+    def _retrieve(self, request: RetrievalRequest, trace: Trace, *,
+                  decrypt: bool) -> tuple[dict, list[dict]]:
+        doctor_id, record_id = request.doctor_id, request.record_id
+        agent = self.doctors.get(doctor_id)
+        if agent is None or agent.capability is None:
+            return self._fail(trace, "no_capability", doctor_id, record_id)
 
         capability = agent.capability
-        auth = self.gateway.authorize_retrieval(doctor_id, record_id, capability.epoch)
+        auth = self.gateway.authorize_retrieval(request)
         trace.decision(
             f"Authorise retrieval of {record_id} for {doctor_id}",
             verdict="AUTHORISED" if auth.ok else "REJECTED",
-            evidence={"reason": auth.reason, "epoch": capability.epoch},
+            evidence={"reason": auth.reason, "epoch": request.epoch,
+                      "nonce": request.nonce},
             detail=auth.detail, algo="Gateway", highlight=True,
         )
         if not auth.ok:
@@ -686,6 +730,14 @@ class DemoWorld:
                    "stop here — before any DEK is used.",
             algo="Merkle", highlight=True,
         )
+
+        if not decrypt:
+            trace.result(f"Ciphertext of {record_id} handed over (not decrypted)",
+                         data={"bytes": len(blob.ciphertext), "record_id": record_id},
+                         algo="BlobStore")
+            return {"ok": True, "reason": "fetched", "record_id": record_id,
+                    "plaintext": None, "ciphertext_bytes": len(blob.ciphertext),
+                    "version": blob.version, "pir": pir_sizes}, trace.to_list()
 
         dek = capability.deks.get(record_id)
         if dek is None:
