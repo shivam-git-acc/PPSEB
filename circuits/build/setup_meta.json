@@ -1,0 +1,18 @@
+{
+ "circuit": "auth.circom",
+ "depth": 4,
+ "constraints": 3202,
+ "public_inputs": [
+  "root",
+  "nullifier",
+  "scope_id",
+  "epoch_tag"
+ ],
+ "ptau_power": 12,
+ "curve": "bn128",
+ "snarkjs": "0.7.6",
+ "circom2": "0.2.23",
+ "circomlib": "2.0.5",
+ "zkey_bytes": 1422887,
+ "trusted_setup": "single-party local dev ceremony; unaudited; not suitable for real use"
+}

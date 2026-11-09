@@ -24,18 +24,99 @@
       "forward_sec",
       "recovery"
     ],
-    "elapsed_s": 41.07
+    "elapsed_s": 196.72
   },
   "kga_success": {
     "mode_A": {
-      "outsider": 100.0,
-      "keyless_server": 100.0,
-      "insider": 100.0
+      "outsider": 85.0,
+      "keyless_server": 85.0,
+      "insider": 85.0
     },
     "mode_B": {
       "outsider": 0.0,
       "keyless_server": 0.0,
       "insider": 100.0
+    },
+    "mode_C": {
+      "outsider": 0.0,
+      "keyless_server": 0.0,
+      "insider": 85.0
+    }
+  },
+  "kga_trials": {
+    "mode_A": {
+      "outsider": {
+        "successes": 17,
+        "trials": 20,
+        "wrong_keyword_matches": 0,
+        "own_ciphertext_failures": 3,
+        "success_rate_given_working_search_pct": 100.0
+      },
+      "keyless_server": {
+        "successes": 17,
+        "trials": 20,
+        "wrong_keyword_matches": 0,
+        "own_ciphertext_failures": 3,
+        "success_rate_given_working_search_pct": 100.0
+      },
+      "insider": {
+        "successes": 17,
+        "trials": 20,
+        "wrong_keyword_matches": 0,
+        "own_ciphertext_failures": 3,
+        "success_rate_given_working_search_pct": 100.0
+      }
+    },
+    "mode_B": {
+      "outsider": {
+        "successes": 0,
+        "trials": 20,
+        "wrong_keyword_matches": 0,
+        "own_ciphertext_failures": 0,
+        "success_rate_given_working_search_pct": 0.0
+      },
+      "keyless_server": {
+        "successes": 0,
+        "trials": 20,
+        "wrong_keyword_matches": 0,
+        "own_ciphertext_failures": 0,
+        "success_rate_given_working_search_pct": 0.0
+      },
+      "insider": {
+        "successes": 20,
+        "trials": 20,
+        "wrong_keyword_matches": 0,
+        "own_ciphertext_failures": 0,
+        "success_rate_given_working_search_pct": 100.0
+      }
+    },
+    "mode_C": {
+      "outsider": {
+        "successes": 0,
+        "trials": 20,
+        "wrong_keyword_matches": 0,
+        "own_ciphertext_failures": 0,
+        "success_rate_given_working_search_pct": 0.0
+      },
+      "keyless_server": {
+        "successes": 0,
+        "trials": 20,
+        "wrong_keyword_matches": 0,
+        "own_ciphertext_failures": 0,
+        "success_rate_given_working_search_pct": 0.0
+      },
+      "insider": {
+        "successes": 17,
+        "trials": 20,
+        "wrong_keyword_matches": 1,
+        "own_ciphertext_failures": 2,
+        "success_rate_given_working_search_pct": 94.44
+      }
+    },
+    "control_unkeyed_hash": {
+      "successes": 10,
+      "trials": 10,
+      "success_rate_pct": 100.0
     }
   },
   "replay_plant": {
@@ -52,13 +133,271 @@
       "plant_reason": "unsigned_entry"
     }
   },
+  "retrieval_replay": {
+    "mode_A": {
+      "replay": true,
+      "replay_reason": "fetched"
+    },
+    "mode_B": {
+      "replay": false,
+      "replay_reason": "reused_nonce"
+    }
+  },
+  "shape_check": {
+    "plant_mode_A_prime": {
+      "plant": false,
+      "plant_reason": "malformed_ciphertext",
+      "honest_entries_indexed": 2
+    },
+    "honest_false_rejects": {
+      "samples": 1000,
+      "false_rejects": 0,
+      "false_reject_rate": 0.0,
+      "lowest_honest_column_rms": 57.499,
+      "threshold_rms": 32.125,
+      "uniform_rms": 74.19,
+      "params": {
+        "n": 4,
+        "q": 257,
+        "m": 72,
+        "l": 10
+      }
+    }
+  },
+  "mode_tradeoff": [
+    {
+      "mode": "A",
+      "public_verify": true,
+      "what_it_is": "PPSEB as published (baseline)",
+      "trapdoor_or_token_on_chain": true,
+      "kga_outsider": "17/20",
+      "kga_keyless_server": "17/20",
+      "kga_insider": "17/20",
+      "search_replay_succeeds": true,
+      "retrieval_replay_succeeds": true,
+      "plant_succeeds": true,
+      "records": 10,
+      "doctors": 2,
+      "queries": 5,
+      "search_ms_per_query": 582.839,
+      "index_entry_bytes": 5936.0,
+      "revocation_ms": 322.505,
+      "revocation_re_index_ops": 10,
+      "params": {
+        "n": 4,
+        "q": 257
+      },
+      "costs_reused_from": null
+    },
+    {
+      "mode": "A\u2032",
+      "public_verify": true,
+      "what_it_is": "PPSEB + cheap CT\u2082 shape check on writes",
+      "trapdoor_or_token_on_chain": true,
+      "kga_outsider": "17/20",
+      "kga_keyless_server": "17/20",
+      "kga_insider": "17/20",
+      "search_replay_succeeds": true,
+      "retrieval_replay_succeeds": true,
+      "plant_succeeds": false,
+      "records": 10,
+      "doctors": 2,
+      "queries": 5,
+      "search_ms_per_query": 582.839,
+      "index_entry_bytes": 5936.0,
+      "revocation_ms": 322.505,
+      "revocation_re_index_ops": 10,
+      "params": {
+        "n": 4,
+        "q": 257
+      },
+      "costs_reused_from": "A"
+    },
+    {
+      "mode": "B",
+      "public_verify": false,
+      "what_it_is": "keyed HMAC index, signed one-time requests",
+      "trapdoor_or_token_on_chain": false,
+      "kga_outsider": "0/20",
+      "kga_keyless_server": "0/20",
+      "kga_insider": "20/20",
+      "search_replay_succeeds": false,
+      "retrieval_replay_succeeds": false,
+      "plant_succeeds": false,
+      "records": 10,
+      "doctors": 2,
+      "queries": 5,
+      "search_ms_per_query": 0.317,
+      "index_entry_bytes": 96.0,
+      "revocation_ms": 4.794,
+      "revocation_re_index_ops": 10,
+      "params": {
+        "n": 4,
+        "q": 257
+      },
+      "costs_reused_from": null
+    },
+    {
+      "mode": "C",
+      "public_verify": true,
+      "what_it_is": "PPSEB on HMAC(K_pd, keyword): PAEKS-style",
+      "trapdoor_or_token_on_chain": true,
+      "kga_outsider": "0/20",
+      "kga_keyless_server": "0/20",
+      "kga_insider": "17/20",
+      "search_replay_succeeds": true,
+      "retrieval_replay_succeeds": true,
+      "plant_succeeds": true,
+      "records": 10,
+      "doctors": 2,
+      "queries": 5,
+      "search_ms_per_query": 630.639,
+      "index_entry_bytes": 5872.0,
+      "revocation_ms": 357.384,
+      "revocation_re_index_ops": 10,
+      "params": {
+        "n": 4,
+        "q": 257
+      },
+      "costs_reused_from": null
+    }
+  ],
+  "leakage": {
+    "what": "Tier 1 / Tier 2 from attacks/ledger.py (unchanged) on MedVault's own logs",
+    "records": 20,
+    "queries": 300,
+    "base_seed": 2100,
+    "summary": {
+      "mode_A_chain": {
+        "seeds": 10,
+        "tier1_purity_mean": 1.0,
+        "tier1_purity_min": 1.0,
+        "observed_groups_mean": 7.3,
+        "records_with_any_match_mean": 18.9,
+        "tier2_accuracy_mean": 0.715,
+        "tier2_accuracy_min": 0.35,
+        "tier2_accuracy_max": 0.9,
+        "baseline_mean": 0.1745,
+        "beats_baseline": "10/10",
+        "honest_misses_mean": 1
+      },
+      "mode_B_chain": {
+        "seeds": 10,
+        "tier1_purity_mean": null,
+        "tier1_purity_min": null,
+        "observed_groups_mean": 0,
+        "records_with_any_match_mean": 0,
+        "tier2_accuracy_mean": 0.19,
+        "tier2_accuracy_min": 0.1,
+        "tier2_accuracy_max": 0.3,
+        "baseline_mean": 0.1845,
+        "beats_baseline": "0/10",
+        "honest_misses_mean": 0
+      },
+      "mode_B_search_node": {
+        "seeds": 10,
+        "tier1_purity_mean": 1.0,
+        "tier1_purity_min": 1.0,
+        "observed_groups_mean": 7.3,
+        "records_with_any_match_mean": 19.9,
+        "tier2_accuracy_mean": 0.755,
+        "tier2_accuracy_min": 0.35,
+        "tier2_accuracy_max": 0.95,
+        "baseline_mean": 0.1828,
+        "beats_baseline": "10/10",
+        "honest_misses_mean": 0
+      }
+    },
+    "cover_query_curve": [
+      {
+        "mode": "B",
+        "view": "search_node",
+        "cover_overhead": 0.0,
+        "extra_searches_per_real_search": 0.0,
+        "seeds": 10,
+        "tier2_accuracy_mean": 0.755,
+        "tier2_accuracy_min": 0.35,
+        "tier2_accuracy_max": 0.95,
+        "baseline_mean": 0.1828,
+        "beats_baseline": "10/10",
+        "tier1_purity_mean": 1.0
+      },
+      {
+        "mode": "B",
+        "view": "search_node",
+        "cover_overhead": 0.25,
+        "extra_searches_per_real_search": 0.25,
+        "seeds": 10,
+        "tier2_accuracy_mean": 0.695,
+        "tier2_accuracy_min": 0.35,
+        "tier2_accuracy_max": 0.9,
+        "baseline_mean": 0.1816,
+        "beats_baseline": "10/10",
+        "tier1_purity_mean": 1.0
+      },
+      {
+        "mode": "B",
+        "view": "search_node",
+        "cover_overhead": 0.5,
+        "extra_searches_per_real_search": 0.5,
+        "seeds": 10,
+        "tier2_accuracy_mean": 0.635,
+        "tier2_accuracy_min": 0.2,
+        "tier2_accuracy_max": 0.9,
+        "baseline_mean": 0.1815,
+        "beats_baseline": "9/10",
+        "tier1_purity_mean": 1.0
+      },
+      {
+        "mode": "B",
+        "view": "search_node",
+        "cover_overhead": 1.0,
+        "extra_searches_per_real_search": 1.0,
+        "seeds": 10,
+        "tier2_accuracy_mean": 0.605,
+        "tier2_accuracy_min": 0.0,
+        "tier2_accuracy_max": 0.9,
+        "baseline_mean": 0.1788,
+        "beats_baseline": "9/10",
+        "tier1_purity_mean": 1.0
+      },
+      {
+        "mode": "B",
+        "view": "search_node",
+        "cover_overhead": 2.0,
+        "extra_searches_per_real_search": 2.0,
+        "seeds": 10,
+        "tier2_accuracy_mean": 0.355,
+        "tier2_accuracy_min": 0.0,
+        "tier2_accuracy_max": 0.9,
+        "baseline_mean": 0.1781,
+        "beats_baseline": "5/10",
+        "tier1_purity_mean": 1.0
+      },
+      {
+        "mode": "B",
+        "view": "search_node",
+        "cover_overhead": 4.0,
+        "extra_searches_per_real_search": 4.0,
+        "seeds": 10,
+        "tier2_accuracy_mean": 0.335,
+        "tier2_accuracy_min": 0.0,
+        "tier2_accuracy_max": 0.9,
+        "baseline_mean": 0.1791,
+        "beats_baseline": "4/10",
+        "tier1_purity_mean": 1.0
+      }
+    ]
+  },
   "access_pattern": {
     "mode_A": {
       "token_on_chain": true,
+      "record_ids_on_chain": true,
       "log_entries": 8
     },
     "mode_B": {
       "token_on_chain": false,
+      "record_ids_on_chain": false,
       "log_entries": 8
     }
   },
@@ -69,8 +408,8 @@
       "mode": "B",
       "queries": 10,
       "plaintext_index_ms_per_query": 0.0004,
-      "keyed_index_ms_per_query": 0.3728,
-      "keyed_index_total_ms": 3.728,
+      "keyed_index_ms_per_query": 0.334,
+      "keyed_index_total_ms": 3.34,
       "index_entries": 50
     },
     {
@@ -78,9 +417,9 @@
       "doctors": 3,
       "mode": "B",
       "queries": 10,
-      "plaintext_index_ms_per_query": 0.0003,
-      "keyed_index_ms_per_query": 0.3273,
-      "keyed_index_total_ms": 3.273,
+      "plaintext_index_ms_per_query": 0.0002,
+      "keyed_index_ms_per_query": 0.3124,
+      "keyed_index_total_ms": 3.124,
       "index_entries": 150
     },
     {
@@ -88,9 +427,9 @@
       "doctors": 3,
       "mode": "B",
       "queries": 10,
-      "plaintext_index_ms_per_query": 0.0002,
-      "keyed_index_ms_per_query": 0.3756,
-      "keyed_index_total_ms": 3.756,
+      "plaintext_index_ms_per_query": 0.0003,
+      "keyed_index_ms_per_query": 0.3793,
+      "keyed_index_total_ms": 3.793,
       "index_entries": 600
     },
     {
@@ -98,7 +437,7 @@
       "doctors": 1,
       "mode": "A",
       "queries": 5,
-      "ppseb_toy_ms_per_query": 880.345,
+      "ppseb_toy_ms_per_query": 528.259,
       "index_entries": 10,
       "params": {
         "n": 4,
@@ -128,7 +467,7 @@
     }
   },
   "revocation_cost": {
-    "time_ms": 18.98,
+    "time_ms": 18.059,
     "transactions": 1,
     "re_key_ops": 2,
     "re_wrap_ops": 2,
@@ -145,9 +484,9 @@
       "hint_bytes": 2097160,
       "query_bytes": 64,
       "answer_bytes": 2048,
-      "server_time_ms": 0.016,
-      "setup_time_ms": 7.476,
-      "client_time_ms": 0.948,
+      "server_time_ms": 0.023,
+      "setup_time_ms": 7.928,
+      "client_time_ms": 3.365,
       "params": {
         "n": 1024,
         "q": "2^32",
@@ -162,9 +501,9 @@
       "hint_bytes": 2097160,
       "query_bytes": 1024,
       "answer_bytes": 2048,
-      "server_time_ms": 0.178,
-      "setup_time_ms": 270.251,
-      "client_time_ms": 0.759,
+      "server_time_ms": 0.179,
+      "setup_time_ms": 187.309,
+      "client_time_ms": 1.247,
       "params": {
         "n": 1024,
         "q": "2^32",
@@ -179,9 +518,9 @@
       "hint_bytes": 2097160,
       "query_bytes": 4096,
       "answer_bytes": 2048,
-      "server_time_ms": 1.177,
-      "setup_time_ms": 2480.93,
-      "client_time_ms": 1.325,
+      "server_time_ms": 1.414,
+      "setup_time_ms": 2431.66,
+      "client_time_ms": 2.405,
       "params": {
         "n": 1024,
         "q": "2^32",
@@ -206,8 +545,8 @@
       "scope_id",
       "epoch_tag"
     ],
-    "prove_and_search_ms": 4006.2,
-    "verify_ms": 292.69,
+    "prove_and_search_ms": 1578.3,
+    "verify_ms": 232.95,
     "verified": true,
     "nullifiers_consumed": 1
   },
@@ -317,8 +656,8 @@
       },
       "search_with_proof": {
         "calls": 1,
-        "mean": 302010,
-        "max": 302010
+        "mean": 301998,
+        "max": 301998
       },
       "revoke": {
         "calls": 1,

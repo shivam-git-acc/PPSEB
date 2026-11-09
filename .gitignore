@@ -20,9 +20,11 @@ backend/results/*
 !backend/results/screenshots/
 
 # Node toolchains for the two auxiliary packages (M4 contracts, M6 circuit).
-# Lockfiles are committed; the installed trees and every build output are not.
+# Lockfiles are committed; the installed trees and build outputs are not, with
+# one exception: circuits/build/ (8.5 MB) IS committed, so a clean clone runs
+# real Groth16 proofs without a Node/circom rebuild on the demo machine. It is a
+# single-party DEV setup, labelled as such everywhere it is used.
 node_modules/
-circuits/build/
 circuits/fresh/
 contracts/artifacts/
 contracts/cache/

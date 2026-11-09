@@ -9,11 +9,28 @@ and points each one at the automated test that runs it as an experiment.
 **What these are, and what they are not.** Each game is stated in the usual
 challenger/adversary form so a reader can see exactly what "the attack
 succeeds" means. Each test *instantiates* the game at toy parameters
-(n = 4, q = 257 for the lattice parts) and measures the adversary's success.
+(n = 4, q = 257 for the lattice PEKS; n = 2, q = 257 for the key tree) and measures the adversary's success.
 A passing test is evidence about this implementation at these parameters. It is
 not a proof, and nothing here is claimed as one.
 
-Numbering follows the mid-sem deck (findings 1–10). Measured values come from
+Numbering follows the mid-sem deck (findings 1–10). Older documents use other
+schemes; this table maps them all to the deck's numbers:
+
+| Deck (canonical) | Finding | Original lab (README intro) | PRD §2 | Traceability rows | Game |
+| --- | --- | --- | --- | --- | --- |
+| 1 | Spec defect: Algorithm 2 circular | 3 | — | — (research arm) | — |
+| 2 | Key recovery from the public key | — | — | — (research arm) | G1 |
+| 3 | Offline keyword guessing | 1 | 1 | F1, F1b | G2 |
+| 4 | Reduction loss in Theorem 1 | — | — | — (research arm) | G0 |
+| 5 | Universal-ciphertext forgery | — | 2 | F2, F2b | G4 |
+| 6 | Access-pattern leakage | — | 4 | F4, F4b | G5 |
+| 7 | Replay | — | 3 | F3, F3b | G3 |
+| 8 | Scaling / cost | — | — | — (research arm) | — |
+| 9 | Forward security vacuous | 2 | — | F7 | G6 |
+| 10 | Security model covers one game | — | 5 | F10 | all |
+| — | Stale / modified cloud data (MedVault addition) | — | — | F5 | G7 |
+| — | No consent or revocation (MedVault addition) | — | — | F6 | G8 |
+ Measured values come from
 `python -m medvault.repro` (seed 42; KGA cells are every dictionary keyword × 2
 seeds = 20 trials; leakage cells are 10 seeds × 20 records × 300 searches).
 Test references are `file::test`, relative to `PPSEB/`.

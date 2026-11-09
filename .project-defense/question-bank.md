@@ -175,3 +175,157 @@ Questions below are based on the repository's code and documented behavior. “S
 **Follow-up:** What other correction event is important for period-key correctness?
 
 **Acceptance criteria:** The test fails if the correction event is removed or the recorded shape is wrong, while allowing unrelated trace text to change.
+
+## MedVault-PQ and the Phase 6 fixes
+
+Numbers below are from `backend/results/repro.json` (seed 42). Finding numbers are the mid-sem deck's 1–10; `docs/security-games.md` maps every other numbering to them.
+
+### Q11: Mode B fixes keyword guessing by replacing PEKS with HMAC. Haven't you just removed the scheme you were asked to analyse?
+
+**Why interviewers ask:** Checks whether you can separate "the attack is closed" from "the scheme is repaired".
+
+**Expected concepts (rubric):**
+- Mode B is a different design: a keyed index, no public tester
+- Mode C keeps PPSEB's own PEKS / Trapdoor / Verify, unchanged
+- Mode C runs them on `HMAC(K_pd, keyword)`; `K_pd` arrives in the ML-KEM envelope
+- The deck's own proposed fix is PAEKS (Huang–Li, the paper's ref. 4)
+
+**Strong answer:** Yes, mode B sidesteps the public tester, which is why mode C exists. Mode C keeps PPSEB's algorithms and its public Verify, and the trapdoor still goes on-chain. What changes is the keyword it encrypts: an HMAC under a key the patient shares with that doctor for that epoch. Measured over 20 trials, the outsider and a keyless chain node recover 0 keywords, while the key-holding insider recovers 17/20. It is PAEKS-style in spirit, not the pairing-based Huang–Li scheme, and it has no proof.
+
+**Weak answers:** "HMAC is post-quantum so it is fine"; claiming mode C is a proven PAEKS; not mentioning that the insider still succeeds.
+
+**Follow-up:** What does mode C *not* fix? (Replay and planting: it authenticates keywords, not requests or ciphertexts.)
+
+### Q12: Mode A's keyword-guessing rate is 85 %, not 100 %. Is the attack unreliable?
+
+**Why interviewers ask:** Tests whether you read your own numbers or just report them.
+
+**Expected concepts (rubric):**
+- Every miss is a trapdoor that fails Verify on its own keyword's honest ciphertext
+- The doctor's real search misses in exactly those cases
+- Conditional on search working, the attack succeeds 100 %
+- Toy parameters (n = 4, q = 257): the deck's "margin law"
+- Success now means the *right* keyword, with false positives counted separately
+
+**Strong answer:** The attack is not the weak part. In 3 of 20 trials the honest trapdoor failed to match its own keyword's ciphertext, a correctness failure at these toy parameters, so the doctor's own search would have missed as well. Over the trials where search works, the attack succeeds 100 % with zero wrong-keyword matches. Mode C's insider also had one false-positive match, the same parameter effect from the other side.
+
+**Weak answers:** Blaming randomness without naming the mechanism; quoting 100 % from a single trial.
+
+**Follow-up:** How does your harness tell a weak attack apart from a weak scheme? (`own_ciphertext_failures` and `success_rate_given_working_search_pct`.)
+
+### Q13: Your mode A′ shape check rejects the `CT₂ = 0` forgery. Does that fix planting?
+
+**Why interviewers ask:** A classic place to overclaim.
+
+**Expected concepts (rubric):**
+- The check rejects short CT₂ columns; honest columns look uniform mod q
+- 0 of 1 000 honest ciphertexts refused; wide margin to the threshold
+- Necessary, not sufficient: it cannot tell honest uniform-looking data from dishonest
+- A signature proves who wrote an entry, not that it is well formed
+- Real closure on an open ledger needs a ZK well-formedness proof (design-only)
+
+**Strong answer:** It stops the paper's canonical forgery and any forgery with a short CT₂ column, and it refused none of 1 000 honest ciphertexts. But it is a necessary condition only, so we do not claim it closes the finding. In mode B a "matches everything" entry cannot exist at all, and writes must be patient-signed, which stops outsiders. A registered but malicious patient can still poison their own index. Closing it for a public ledger needs a zero-knowledge proof that the ciphertext is a genuine small-noise sample, described in `docs/design-only-fixes.md`.
+
+**Weak answers:** "Signed writes fix it"; "the check proves well-formedness".
+
+**Follow-up:** Why is lattice ZK the consistent choice over the Groth16 you already use?
+
+### Q14: Mode B hides the access pattern from the chain. Is mode B private?
+
+**Why interviewers ask:** Tests whether you know who the remaining observer is.
+
+**Expected concepts (rubric):**
+- Chain observer: 0 records visible; Tier 2 0.19 against chance 0.18
+- The search node computes matches, so it still sees tokens and matched ids (R11.10)
+- Measured: Tier 2 0.755 against the search node, 10/10 seeds above chance
+- PIR hides retrieval from storage, not the search node's view
+- Cover queries lower Tier 2 (0.355 at 2×) but never Tier 1
+
+**Strong answer:** Private from the chain, not from the search node. We measured it with the mid-sem Tier 1 / Tier 2 attacks, unchanged: the search node labels records about as well as PPSEB's public chain does. Cover queries help Tier 2 partly and at real cost, but co-access grouping stays 100 % pure, because which records answer together and how many records each disease has do not change. Hiding that needs oblivious search (ORAM), which is design-only.
+
+**Weak answers:** "PIR fixes access-pattern leakage"; "mode B leaks nothing".
+
+**Follow-up:** Why does Tier 2 stay above chance even at 4× cover traffic? (Group sizes still mirror prevalence.)
+
+### Q15: Why sign retrieval requests separately from searches?
+
+**Why interviewers ask:** Checks protocol-level thinking.
+
+**Expected concepts (rubric):**
+- Deck finding 7 is "replay it, pull the record"
+- A retrieval carries its own Ed25519 signature, epoch and nonce
+- One per-doctor nonce counter covers search and retrieval
+- Domain separation: a search signature cannot be used as a retrieval signature
+- A rejected request does not consume a nonce
+
+**Strong answer:** Signing only searches would leave the fetch itself replayable. Retrievals are signed over a domain-separated message, so the two signature types cannot be swapped, and they spend nonces from the same counter. A replay is rejected as `reused_nonce`; a forged, tampered or cross-used signature as `bad_signature`, without burning the nonce, so a rejected request cannot lock the doctor out.
+
+**Weak answers:** "The token already authenticates the doctor"; ignoring denial of service via burnt nonces.
+
+**Follow-up:** What does a replay give an attacker in mode A? (Ciphertext and the fact of access, never plaintext.)
+
+### Q16: Is PPSEB forward secure?
+
+**Why interviewers ask:** The paper claims it; the answer must be precise.
+
+**Expected concepts (rubric):**
+- The backward attack works, but the public key alone already breaks these parameters
+- So forward security is vacuous here, not broken
+- The paper never proves forward security as its own statement
+- M7 shows structure, correctness at every node and measured norms only
+
+**Strong answer:** At the paper's parameters the question cannot be asked meaningfully: the public key alone yields a working short basis, so stealing today's key adds nothing. That makes the claim vacuous rather than broken. Our tree-based key evolution demonstrates structure, `A·T ≡ 0 (mod q)` at all 31 nodes and flat norms; we claim nothing about forward security.
+
+**Weak answers:** "We proved it is forward secure"; "we broke forward security".
+
+**Follow-up:** What would you need before a forward-security claim made sense?
+
+### Q17: The gateway receives the record id when authorising a retrieval. Doesn't that defeat PIR?
+
+**Why interviewers ask:** Tests whether you know your own trust boundaries.
+
+**Expected concepts (rubric):**
+- Design decision D5: gateway and search node are one process
+- PIR protects against the storage server, which never sees a record id
+- The gateway/search node already knows matched ids (R11.10)
+- Splitting the process would not remove that knowledge from the search side
+
+**Strong answer:** PIR's adversary is the storage server, and the test shows it never receives a record id. The gateway shares a process with the search node by design, and the search node already knows which records matched, so authorisation reveals nothing new to it. Separating them would need the authorisation itself to be private, for example by proving scope in zero knowledge.
+
+**Weak answers:** "PIR hides everything"; not knowing where the record id travels.
+
+**Follow-up:** Which leakage does the threat-model table document for the search node?
+
+### Q18: Some pre-existing research-arm tests fail. Why should we trust the suite?
+
+**Why interviewers ask:** Tests honesty and diagnosis.
+
+**Expected concepts (rubric):**
+- The research code and its tests are untouched (R8.1)
+- Ledger failures: honest trapdoors miss their own records at toy parameters
+- Sweep test: a Windows environment quirk; the property holds when re-checked
+- Lab full-flow test: intermittent; a global-`random` fallback is the likely cause
+- MedVault's suite: 206 passed; the leakage numbers are regenerated by script
+
+**Strong answer:** We did not edit those tests. Each failure is diagnosed in `task.md` (X-T8): two are a toy-parameter correctness failure, one is an environment issue, one is intermittent with a likely cause we state but have not proven. The reproducible replacement for the ledger numbers is `medvault/leakage.py` over 10 seeds, which `repro` regenerates.
+
+**Weak answers:** "The whole suite is green"; "those tests are flaky, ignore them".
+
+**Follow-up:** How would you make the lab's runs reproducible without changing their results?
+
+### Q19: Is MedVault-PQ post-quantum?
+
+**Why interviewers ask:** Checks the claims policy.
+
+**Expected concepts (rubric):**
+- Key wrapping (ML-KEM-768) and PIR use lattice assumptions
+- ML-KEM here is the pure-Python fallback, labelled non-hardened
+- Groth16 over BN254 and the chain's signatures are classical
+- The Groth16 setup is a single-party dev ceremony
+- PPSEB at toy parameters is broken by the public key alone
+
+**Strong answer:** No, and we do not say so. Key wrapping and PIR rest on lattice assumptions; the ZK proofs and chain signatures are classical, the trusted setup is a development ceremony, and the lattice PEKS runs at parameters that are broken. The accurate claim is that each finding has a fix and a regression test, and cost and leakage are measured.
+
+**Weak answers:** "Yes, it uses ML-KEM"; "PPSEB is now Module-LWE".
+
+**Follow-up:** Which component would you replace first to strengthen the claim?

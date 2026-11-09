@@ -837,7 +837,7 @@
       "hint_bytes": 16777224,
       "query_bytes": 12,
       "answer_bytes": 16384,
-      "server_ms": 0.029,
+      "server_ms": 0.023,
       "db_rows": 3,
       "params": {
        "n": 1024,
@@ -859,7 +859,7 @@
       "epoch_tag"
      ],
      "public_input_count": 4,
-     "verify_ms": 253.76,
+     "verify_ms": 232.46,
      "private": [
       "secret_s",
       "pathElements",
@@ -914,7 +914,7 @@
      "data": {
       "verdict": "VALID",
       "label": "Groth16 BN254 \u2014 classical, single-party DEV setup",
-      "verification_ms": 253.75639999999999
+      "verification_ms": 232.45819999999998
      },
      "algo": "ZK",
      "highlight": true
@@ -984,7 +984,7 @@
       "hint_bytes": 16777224,
       "query_bytes": 12,
       "answer_bytes": 16384,
-      "server_ms": 0.029,
+      "server_ms": 0.023,
       "db_rows": 3,
       "params": {
        "n": 1024,
@@ -1418,7 +1418,7 @@
       "doctor_c"
      ],
      "cost": {
-      "time_ms": 223.159,
+      "time_ms": 14.462,
       "transactions": 1,
       "re_key_ops": 2,
       "re_wrap_ops": 2,
@@ -1514,7 +1514,7 @@
      "title": "Revocation cost measured",
      "detail": "",
      "data": {
-      "time_ms": 223.159,
+      "time_ms": 14.462,
       "transactions": 1,
       "re_key_ops": 2,
       "re_wrap_ops": 2,
@@ -1601,7 +1601,7 @@
       "hint_bytes": 16777224,
       "query_bytes": 12,
       "answer_bytes": 16384,
-      "server_ms": 0.047,
+      "server_ms": 0.032,
       "db_rows": 3,
       "params": {
        "n": 1024,
@@ -1656,7 +1656,7 @@
      "data": {
       "verdict": "VALID",
       "label": "Groth16 BN254 \u2014 classical, single-party DEV setup",
-      "verification_ms": 230.33319999999998
+      "verification_ms": 225.38509999999997
      },
      "algo": "ZK",
      "highlight": true
@@ -1745,7 +1745,7 @@
       "hint_bytes": 16777224,
       "query_bytes": 12,
       "answer_bytes": 16384,
-      "server_ms": 10.784,
+      "server_ms": 0.02,
       "db_rows": 3,
       "params": {
        "n": 1024,
@@ -2314,7 +2314,7 @@
  "passed": 9,
  "graded": 9,
  "pending": [],
- "elapsed_s": 36.94,
+ "elapsed_s": 18.55,
  "within_ten_minutes": true,
  "seed": 42,
  "mode": "B",
