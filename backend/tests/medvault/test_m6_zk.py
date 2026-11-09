@@ -211,3 +211,24 @@ def test_revoked_doctor_cannot_get_a_new_proof(groth16_world):
     assert "doctor_a" not in world.consent_tree.positions
     assert world.search("doctor_a", "diabetes")[0]["reason"] == "stale_epoch"
     assert world.search("doctor_b", "diabetes")[0]["ok"]
+
+
+def test_auto_mode_falls_back_when_the_prover_package_is_missing(tmp_path, monkeypatch):
+    """A fresh clone has the committed circuit build but not circuits/node_modules.
+
+    Auto mode must then pick the labelled signed fallback, not Groth16 that fails
+    at the first proof (found by the clean-clone run).
+    """
+    import medvault.zk as zk
+
+    for rel in ("build/auth_js/auth.wasm", "build/auth_final.zkey",
+                "build/verification_key.json", "build/setup_meta.json"):
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text("x")
+    monkeypatch.setattr(zk, "CIRCUITS", tmp_path)
+    assert zk.ZKAuthorisation.available() is False
+    assert zk.ZKAuthorisation("auto").mode == "signed"
+
+    (tmp_path / "node_modules/snarkjs").mkdir(parents=True)
+    (tmp_path / "node_modules/snarkjs/package.json").write_text("{}")
+    assert zk.ZKAuthorisation.available() is (zk.shutil.which("node") is not None)

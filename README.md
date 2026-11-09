@@ -82,10 +82,12 @@ test is renamed or removed.
 | 6 · Access-pattern leakage | Mode B: the chain stores one commitment per search, never the trapdoor or the matched records; PIR hides retrieval from storage. Measured with the mid-sem Tier 1 / Tier 2 attacks, **unchanged**, on MedVault's own logs (`medvault/leakage.py`, 10 seeds, 20 records, 300 searches) | Chain observer. PPSEB-style mode A chain: Tier 1 groups 100 % pure, Tier 2 labels 0.715 of records vs chance 0.17 (10/10 seeds). Mode B chain: no record ever visible, Tier 2 0.19 vs chance 0.18 (0/10) | **The search node.** It still sees tokens and matches (R11.10): Tier 2 0.755, 10/10. Cover queries (real searches, scheduled to flatten keyword counts) lower that to 0.355 at 2× and 0.335 at 4× extra searches, still above chance in 4–5 of 10 seeds, and leave Tier 1 at 100 %: co-access and group sizes are untouched by frequency smoothing. Hiding co-access needs oblivious search (ORAM), design-only |
 | 7 · Replay | Signed, nonce-bound, epoch-checked **search and retrieval** requests; one per-doctor counter covers both; signatures are domain-separated | Re-sending a captured search (`reused_nonce`) and re-sending a captured fetch to pull the record again (`reused_nonce`); a search signature cannot be presented as a fetch signature | Nothing beyond the doctor's own device: a stolen signing key is out of scope |
 
-Neither needs network access. The circuit in `circuits/build/` is generated and
-gitignored; rebuild it with `npm --prefix circuits install && npm --prefix
-circuits run build` (about a minute) if it is missing — without it the system
-falls back to the labelled signed consent mode. Gas needs a chain:
+Neither needs network access once set up. The circuit build in `circuits/build/`
+is committed (a single-party dev setup), so nothing needs compiling, but the
+prover needs its Node package: run `npm --prefix circuits ci` once on a fresh
+clone (this step does need the network, or an npm cache). Until then the system
+falls back to the labelled signed consent mode instead of Groth16; rebuilding the
+circuit itself (`npm --prefix circuits run build`, about a minute) is optional. Gas needs a chain:
 `npm --prefix contracts install && npm --prefix contracts run compile`, then
 `npm --prefix contracts run node`.
 

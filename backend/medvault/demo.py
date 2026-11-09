@@ -209,14 +209,23 @@ def run_demo(config: MedVaultConfig | None = None, *, world: DemoWorld | None = 
     retrieval, retrieval_trace = world.retrieve("doctor_a", "rec-lab")
     proof = _proof_summary(world)
     reused_ok, reused_reason, reused_trace = _replay_the_proof(world)
+    # Only a Groth16 nullifier can detect a reused proof. The signed fallback
+    # has none (documented, and labelled in proof_mode), so in that mode the
+    # reuse check is reported as skipped rather than failing the step: before,
+    # the demo could never pass on a machine without the prover installed.
+    reuse_checkable = world.zk.mode == "groth16"
     steps.append(_step(
         4, "Doctor A searches and retrieves, with integrity checked first",
         search["ok"] and retrieval["ok"] and bool(retrieval.get("plaintext"))
-        and not reused_ok,
+        and (not reused_ok if reuse_checkable else True),
         {"search": search, "retrieval": {k: v for k, v in retrieval.items()
                                          if k != "plaintext"},
-         "proof": proof, "reused_proof": {"accepted": reused_ok,
-                                          "reason": reused_reason}},
+         "proof": proof, "reused_proof": {
+             "accepted": reused_ok, "reason": reused_reason,
+             "checked": reuse_checkable,
+             **({} if reuse_checkable else {
+                 "skipped_because": "signed fallback has no nullifier; install the "
+                                    "prover (npm --prefix circuits ci) for Groth16"})}},
         _concat_traces(search_trace, retrieval_trace, reused_trace),
     ))
 
@@ -387,6 +396,11 @@ def record_run(report: dict, *, latest: Path | None = None,
     golden = GOLDEN_TRACE if golden is None else golden
     save_report(report, latest)
     promote, why = promotable(report)
+    if promote and "Groth16" not in str(report.get("proof_mode", "")):
+        existing = load_report(golden)
+        if existing and "Groth16" in str(existing.get("proof_mode", "")):
+            # Never trade a Groth16 golden run for a weaker signed-fallback one.
+            promote, why = False, "golden is a Groth16 run; this run used the signed fallback"
     if promote:
         save_report(report, golden)
     return {"latest": str(latest), "golden": str(golden),

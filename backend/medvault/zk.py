@@ -102,9 +102,14 @@ class ZKAuthorisation:
 
     @staticmethod
     def available() -> bool:
+        # runner.js imports snarkjs, so the prover needs the installed package as
+        # well as the (committed) build. Without it a fresh clone used to pick
+        # Groth16 in auto mode and fail at the first proof; now auto falls back
+        # to the labelled signed mode until `npm --prefix circuits ci` is run.
         return shutil.which('node') is not None and all((CIRCUITS / p).exists() for p in (
             'build/auth_js/auth.wasm', 'build/auth_final.zkey',
-            'build/verification_key.json', 'build/setup_meta.json'))
+            'build/verification_key.json', 'build/setup_meta.json',
+            'node_modules/snarkjs/package.json'))
 
     @property
     def label(self) -> str:

@@ -272,3 +272,28 @@ def test_a_missing_saved_trace_is_not_an_exception(tmp_path):
     broken = tmp_path / "broken.json"
     broken.write_text("{not json", encoding="utf-8")
     assert load_report(broken) is None
+
+
+def test_signed_fallback_demo_passes_and_says_the_reuse_check_was_skipped():
+    """Found by the clean-clone run: without the prover installed, step 4 used to
+    fail because only a Groth16 nullifier can detect proof reuse."""
+    from medvault.demo import run_demo
+
+    world = build_world(MedVaultConfig(seed=42, zk_mode="signed"))
+    report = run_demo(world=world)
+    step4 = next(s for s in report["steps"] if s["index"] == 4)
+    assert step4["ok"] is True
+    assert step4["result"]["reused_proof"]["checked"] is False
+    assert "no nullifier" in step4["result"]["reused_proof"]["skipped_because"]
+    assert "not zero knowledge" in report["proof_mode"]
+
+
+def test_a_signed_run_never_replaces_a_groth16_golden(tmp_path):
+    golden, latest = tmp_path / "golden.json", tmp_path / "latest.json"
+    groth = _report(9); groth["proof_mode"] = "Groth16 BN254 — classical"
+    save_report(groth, golden)
+    before = golden.read_bytes()
+    signed = _report(9); signed["proof_mode"] = "SIGNED CONSENT FALLBACK — not zero knowledge"
+    info = record_run(signed, latest=latest, golden=golden)
+    assert info["promoted"] is False and "Groth16" in info["reason"]
+    assert golden.read_bytes() == before
