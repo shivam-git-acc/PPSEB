@@ -10,6 +10,8 @@
      "attacker": "outsider",
      "success": true,
      "success_rate_pct": 100.0,
+     "wrong_keyword": false,
+     "own_ciphertext_failed": false,
      "recovered_keyword": "hypertension",
      "guesses_tried": 3,
      "dictionary_size": 10,
@@ -124,6 +126,7 @@
      "reason": "accepted",
      "planted_record_id": "PLANTED",
      "appears_in_search": true,
+     "honest_entries_indexed": 2,
      "record_ids": [
       "PLANTED",
       "rec-001"
@@ -243,6 +246,10 @@
     "access_pattern": {
      "mode": "A",
      "token_on_chain": true,
+     "matched_record_ids": [
+      "rec-001"
+     ],
+     "record_ids_on_chain": true,
      "log_entries": 8,
      "log_keys": [
       "commitment",
@@ -251,14 +258,14 @@
       "doctor_id",
       "epoch",
       "event_id",
+      "matched",
       "nonce",
       "note",
       "patient",
       "public_token",
       "timestamp",
       "type"
-     ],
-     "record_ids_on_chain": false
+     ]
     }
    },
    "trace": [
@@ -830,7 +837,7 @@
       "hint_bytes": 16777224,
       "query_bytes": 12,
       "answer_bytes": 16384,
-      "server_ms": 0.03,
+      "server_ms": 0.029,
       "db_rows": 3,
       "params": {
        "n": 1024,
@@ -852,7 +859,7 @@
       "epoch_tag"
      ],
      "public_input_count": 4,
-     "verify_ms": 234.07,
+     "verify_ms": 253.76,
      "private": [
       "secret_s",
       "pathElements",
@@ -907,7 +914,7 @@
      "data": {
       "verdict": "VALID",
       "label": "Groth16 BN254 \u2014 classical, single-party DEV setup",
-      "verification_ms": 234.06860000000003
+      "verification_ms": 253.75639999999999
      },
      "algo": "ZK",
      "highlight": true
@@ -943,19 +950,33 @@
     },
     {
      "step": 6,
+     "type": "note",
+     "title": "doctor_a signs a retrieval request",
+     "detail": "Ed25519 over (record id, nonce, epoch, timestamp), domain-separated from search; the nonce comes from the same counter as searches.",
+     "data": {
+      "nonce": 2,
+      "epoch": 0,
+      "mode": "B"
+     },
+     "algo": "RetrievalRequest",
+     "highlight": false
+    },
+    {
+     "step": 7,
      "type": "decision",
      "title": "Authorise retrieval of rec-lab for doctor_a",
      "detail": "",
      "data": {
       "verdict": "AUTHORISED",
       "reason": "authorized",
-      "epoch": 0
+      "epoch": 0,
+      "nonce": 2
      },
      "algo": "Gateway",
      "highlight": true
     },
     {
-     "step": 7,
+     "step": 8,
      "type": "compute",
      "title": "Private retrieval via LWE PIR",
      "detail": "Storage sees encrypted query and sizes, not row index. Search node still sees matching IDs; collusion defeats privacy.",
@@ -963,7 +984,7 @@
       "hint_bytes": 16777224,
       "query_bytes": 12,
       "answer_bytes": 16384,
-      "server_ms": 0.03,
+      "server_ms": 0.029,
       "db_rows": 3,
       "params": {
        "n": 1024,
@@ -978,7 +999,7 @@
      "highlight": false
     },
     {
-     "step": 8,
+     "step": 9,
      "type": "decision",
      "title": "Integrity verified before decryption",
      "detail": "Stale version, altered bytes, a bad proof and a root mismatch all stop here \u2014 before any DEK is used.",
@@ -992,7 +1013,7 @@
      "highlight": true
     },
     {
-     "step": 9,
+     "step": 10,
      "type": "result",
      "title": "Decrypted rec-lab",
      "detail": "",
@@ -1004,7 +1025,7 @@
      "highlight": true
     },
     {
-     "step": 10,
+     "step": 11,
      "type": "note",
      "title": "Gateway checks (mode B)",
      "detail": "gates: signature, epoch, nonce, scope",
@@ -1023,7 +1044,7 @@
      "highlight": false
     },
     {
-     "step": 11,
+     "step": 12,
      "type": "decision",
      "title": "Search rejected: bad_proof",
      "detail": "Invalid proof, old root or reused nullifier",
@@ -1049,6 +1070,8 @@
       "attacker": "outsider",
       "success": false,
       "success_rate_pct": 0.0,
+      "wrong_keyword": false,
+      "own_ciphertext_failed": false,
       "recovered_keyword": null,
       "guesses_tried": 10,
       "dictionary_size": 10,
@@ -1107,6 +1130,8 @@
       "attacker": "keyless_server",
       "success": false,
       "success_rate_pct": 0.0,
+      "wrong_keyword": false,
+      "own_ciphertext_failed": false,
       "recovered_keyword": null,
       "guesses_tried": 10,
       "dictionary_size": 10,
@@ -1165,6 +1190,8 @@
       "attacker": "insider",
       "success": true,
       "success_rate_pct": 100.0,
+      "wrong_keyword": false,
+      "own_ciphertext_failed": false,
       "recovered_keyword": "hypertension",
       "guesses_tried": 3,
       "dictionary_size": 10,
@@ -1321,6 +1348,10 @@
     "access_pattern": {
      "mode": "B",
      "token_on_chain": false,
+     "matched_record_ids": [
+      "rec-001"
+     ],
+     "record_ids_on_chain": false,
      "log_entries": 8,
      "log_keys": [
       "commitment",
@@ -1334,8 +1365,7 @@
       "patient",
       "timestamp",
       "type"
-     ],
-     "record_ids_on_chain": false
+     ]
     }
    },
    "trace": [
@@ -1388,7 +1418,7 @@
       "doctor_c"
      ],
      "cost": {
-      "time_ms": 15.547,
+      "time_ms": 223.159,
       "transactions": 1,
       "re_key_ops": 2,
       "re_wrap_ops": 2,
@@ -1402,7 +1432,7 @@
      "reason": "stale_epoch",
      "record_ids": [],
      "keyword": "diabetes",
-     "nonce": 3,
+     "nonce": 4,
      "epoch": 0,
      "mode": "B"
     },
@@ -1484,7 +1514,7 @@
      "title": "Revocation cost measured",
      "detail": "",
      "data": {
-      "time_ms": 15.547,
+      "time_ms": 223.159,
       "transactions": 1,
       "re_key_ops": 2,
       "re_wrap_ops": 2,
@@ -1501,7 +1531,7 @@
      "title": "doctor_a signs a search request",
      "detail": "Ed25519 over (token, nonce, epoch, timestamp); the token itself is never written to the chain.",
      "data": {
-      "nonce": 3,
+      "nonce": 4,
       "epoch": 0,
       "mode": "B",
       "token": "206f992c489573ca"
@@ -1571,7 +1601,7 @@
       "hint_bytes": 16777224,
       "query_bytes": 12,
       "answer_bytes": 16384,
-      "server_ms": 0.035,
+      "server_ms": 0.047,
       "db_rows": 3,
       "params": {
        "n": 1024,
@@ -1626,7 +1656,7 @@
      "data": {
       "verdict": "VALID",
       "label": "Groth16 BN254 \u2014 classical, single-party DEV setup",
-      "verification_ms": 237.1085
+      "verification_ms": 230.33319999999998
      },
      "algo": "ZK",
      "highlight": true
@@ -1681,19 +1711,33 @@
    "trace": [
     {
      "step": 1,
+     "type": "note",
+     "title": "doctor_b signs a retrieval request",
+     "detail": "Ed25519 over (record id, nonce, epoch, timestamp), domain-separated from search; the nonce comes from the same counter as searches.",
+     "data": {
+      "nonce": 3,
+      "epoch": 1,
+      "mode": "B"
+     },
+     "algo": "RetrievalRequest",
+     "highlight": false
+    },
+    {
+     "step": 2,
      "type": "decision",
      "title": "Authorise retrieval of rec-cxr for doctor_b",
      "detail": "",
      "data": {
       "verdict": "AUTHORISED",
       "reason": "authorized",
-      "epoch": 1
+      "epoch": 1,
+      "nonce": 3
      },
      "algo": "Gateway",
      "highlight": true
     },
     {
-     "step": 2,
+     "step": 3,
      "type": "compute",
      "title": "Private retrieval via LWE PIR",
      "detail": "Storage sees encrypted query and sizes, not row index. Search node still sees matching IDs; collusion defeats privacy.",
@@ -1701,7 +1745,7 @@
       "hint_bytes": 16777224,
       "query_bytes": 12,
       "answer_bytes": 16384,
-      "server_ms": 0.021,
+      "server_ms": 10.784,
       "db_rows": 3,
       "params": {
        "n": 1024,
@@ -1716,7 +1760,7 @@
      "highlight": false
     },
     {
-     "step": 3,
+     "step": 4,
      "type": "decision",
      "title": "Retrieval refused: content_hash_mismatch",
      "detail": "No plaintext is produced when any check fails.",
@@ -2270,7 +2314,7 @@
  "passed": 9,
  "graded": 9,
  "pending": [],
- "elapsed_s": 18.47,
+ "elapsed_s": 36.94,
  "within_ten_minutes": true,
  "seed": 42,
  "mode": "B",

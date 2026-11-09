@@ -136,10 +136,14 @@ def test_retrieval_gates_reject_forged_and_cross_used_signatures():
 
 def test_finding_access_pattern_is_public():
     """F4 — commitments only on-chain, private retrieval via PIR (M5)."""
-    assert run_access_pattern("A")["token_on_chain"] is True
+    baseline = run_access_pattern("A")
+    assert baseline["token_on_chain"] is True
+    assert baseline["record_ids_on_chain"] is True   # PPSEB's step 4, now modelled
     hardened = run_access_pattern("B")
     assert hardened["token_on_chain"] is False
+    assert hardened["record_ids_on_chain"] is False
     assert "public_token" not in hardened["log_keys"]
+    assert "matched" not in hardened["log_keys"]
 
 
 def test_finding_stale_or_modified_cloud_data():

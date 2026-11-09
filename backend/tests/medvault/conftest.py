@@ -29,6 +29,31 @@ def config(fixed_seed: int) -> MedVaultConfig:
 
 
 @pytest.fixture(scope="session")
+def fast_repro():
+    """`repro.run_repro(seed, fast=True)`, run at most once per seed per session.
+
+    The fast repro takes most of a minute and several tests only read its
+    output; running it once per test made the suite 2.5x slower. Tests that
+    must see a *fresh* run (determinism) call `repro.run_repro` themselves.
+    Returns `(result, wall_clock_seconds)`.
+    """
+    import time
+
+    from medvault import repro
+
+    cache: dict[int, tuple[dict, float]] = {}
+
+    def get(seed: int = 42) -> tuple[dict, float]:
+        if seed not in cache:
+            started = time.time()
+            result = repro.run_repro(seed, fast=True)
+            cache[seed] = (result, time.time() - started)
+        return cache[seed]
+
+    return get
+
+
+@pytest.fixture(scope="session")
 def kem():
     """One KEM wrapper for the whole session: the probe runs once."""
     return get_kem_wrapper()

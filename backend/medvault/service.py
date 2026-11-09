@@ -230,7 +230,11 @@ class DemoWorld:
         self.zk = ZKAuthorisation(self.config.zk_mode)
         if self.config.ledger_mode == "hardhat":
             from .chain import HardhatConsentLedger
-            self.ledger = HardhatConsentLedger(require_proof=self.zk.mode == "groth16")
+            # Only mode B has a ZK verifier at the gateway; modes A and C send no
+            # proof, so their contract must not demand one (it used to, and the
+            # first search in A or C on a chain failed with missing_proof).
+            self.ledger = HardhatConsentLedger(
+                require_proof=self.zk.mode == "groth16" and self.mode == "B")
             self.gateway.ledger = self.ledger
         self.consent_tree = None
         self.gateway.zk_verifier = self.zk if self.mode == "B" else None

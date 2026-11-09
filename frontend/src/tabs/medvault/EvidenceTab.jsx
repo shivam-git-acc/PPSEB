@@ -155,6 +155,46 @@ export default function EvidenceTab() {
         </Card>
         </div>
 
+        <div className="lg:col-span-2">
+        <Card title="Access-pattern leakage" subtitle="The mid-sem Tier 1 / Tier 2 attacks, unchanged, run on MedVault's own logs.">
+          <Table
+            columns={[
+              { key: "view", label: "Observer", mono: false },
+              { key: "tier1_purity_mean", label: "Tier 1 purity" },
+              { key: "records_with_any_match_mean", label: "Records seen" },
+              { key: "tier2_accuracy_mean", label: "Tier 2 accuracy" },
+              { key: "baseline_mean", label: "Chance" },
+              { key: "beats_baseline", label: "Beats chance" },
+            ]}
+            rows={tables?.leakage && Object.entries(tables.leakage.summary).map(([view, row]) => ({
+              view: { mode_A_chain: "Mode A — chain observer (PPSEB)",
+                      mode_B_chain: "Mode B — chain observer",
+                      mode_B_search_node: "Mode B — search node" }[view] ?? view,
+              ...row,
+            }))}
+          />
+          <div className="mt-4">
+            <Table
+              columns={[
+                { key: "cover_overhead", label: "Cover searches per real one" },
+                { key: "tier2_accuracy_mean", label: "Tier 2 accuracy" },
+                { key: "baseline_mean", label: "Chance" },
+                { key: "beats_baseline", label: "Beats chance" },
+                { key: "tier1_purity_mean", label: "Tier 1 purity" },
+              ]}
+              rows={tables?.leakage?.cover_query_curve}
+            />
+          </div>
+          <p className="text-2xs text-ink-500 mt-3 leading-relaxed">
+            Mode B removes the access pattern from the chain but not from the search node, which
+            still sees tokens and matches (R11.10). Cover queries (real searches, scheduled to
+            flatten keyword counts) lower Tier 2 but never Tier 1: which records answer together
+            is untouched by frequency smoothing, and group sizes still mirror prevalence. Hiding
+            co-access needs oblivious search (ORAM), which is design-only here.
+          </p>
+        </Card>
+        </div>
+
         <Card title="Storage overhead" subtitle="Bytes, measured on one record of 256 bytes.">
           {storage ? (
             <KeyValues entries={{

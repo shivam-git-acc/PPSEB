@@ -110,3 +110,21 @@ def test_chain_log_carries_no_record_ids(world):
 
     log = json.dumps(world.ledger.chain_log())
     assert "r1" not in log and "diabetes" not in log
+
+
+@pytest.mark.parametrize("mode", ["A", "C"])
+def test_proofless_modes_run_on_the_chain_with_auto_proof_mode(mode):
+    """Modes A and C have no ZK verifier at the gateway and send no proof.
+
+    With zk_mode="auto" (the UI default) their contract used to be deployed
+    with requireProof, so the first search failed with missing_proof. Only
+    mode B, which carries proofs, may deploy a proof-requiring contract.
+    """
+    world = build_world(MedVaultConfig(seed=42, index_mode=mode, ledger_mode="hardhat",
+                                       zk_mode="auto"), mode=mode)
+    assert world.ledger.require_proof is False
+    world.upload_record("r1", "body", ["diabetes"], tag="lab")
+    world.grant_scope("doctor_a", Scope.record_tag("lab"))
+    search, _ = world.search("doctor_a", "diabetes")
+    assert search["ok"] is True and search["record_ids"] == ["r1"]
+    assert world.retrieve("doctor_a", "r1")[0]["ok"] is True

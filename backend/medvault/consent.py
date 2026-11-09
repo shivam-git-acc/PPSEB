@@ -485,6 +485,21 @@ class MemoryConsentLedger(ConsentLedger):
                          self.current_epoch(patient_id),
                          data_hash=commitment.hex(), note=f"nonce={nonce}")
 
+    def record_search_result(self, commitment: bytes, matched: list[str]) -> None:
+        """PPSEB step 4: the chain returns the matching sequence numbers.
+
+        Called only by the mode A and mode C gateways, which model PPSEB's
+        public on-chain search. Attaching the match set to the search record is
+        what makes deck finding 6 (access-pattern leakage) visible to a chain
+        observer. Mode B never calls it: its chain log stays commitment-only.
+        """
+        target = commitment.hex()
+        for record in reversed(self._search_commitments):
+            if record["commitment"] == target:
+                record["matched"] = list(matched)
+                return
+        raise KeyError("no search commitment to attach a result to")
+
     def search_commitments(self) -> list[dict]:
         return list(self._search_commitments)
 

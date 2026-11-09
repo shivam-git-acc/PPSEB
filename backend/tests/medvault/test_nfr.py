@@ -14,7 +14,6 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from medvault import repro
 from medvault.config import MedVaultConfig, library_versions
 from medvault.crypto import SeededRandomSource, sha256
 from medvault.envelope import Scope
@@ -119,9 +118,10 @@ def test_library_versions_are_recorded():
     assert "numpy" in versions and "cryptography" in versions
 
 
-def test_repro_records_seed_and_versions():
-    result = repro.run_repro(7, fast=True)
-    assert result["meta"]["seed"] == 7
+def test_repro_records_seed_and_versions(fast_repro):
+    # A non-default seed, shared with the fingerprint test in test_m8_harness.
+    result, _ = fast_repro(1234)
+    assert result["meta"]["seed"] == 1234
     assert result["meta"]["library_versions"]["python"]
     assert result["meta"]["kem_label"]
 

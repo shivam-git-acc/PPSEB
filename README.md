@@ -37,6 +37,8 @@ backend/    Python (FastAPI) — the lattice crypto + the three attacks
 frontend/   React (Vite) + Tailwind — the lab UI
 circuits/   M6 — Circom circuit + snarkjs/Groth16 dev setup (generated build/)
 contracts/  M4/M6 — ConsentRegistry.sol on a local Hardhat chain (opt-in)
+docs/       security-games.md (the games the paper lacks, each tied to a test)
+            design-only-fixes.md (Module-LWE, ORAM, forward security, ZK well-formedness)
 ```
 
 ## Running
@@ -65,7 +67,12 @@ down or does not answer within 5 seconds.
 
 ### MedVault-PQ: what each fix closes, and what it does not
 
-Numbering follows the mid-sem deck (findings 1–10).
+Numbering follows the mid-sem deck (findings 1–10). The paper's model covers
+one game; [`docs/security-games.md`](docs/security-games.md) writes down the
+others (G0–G8), each with its measured outcome per mode and the test that runs
+it, and [`docs/design-only-fixes.md`](docs/design-only-fixes.md) covers the fixes
+that were not built. `tests/medvault/test_docs_references.py` fails if a cited
+test is renamed or removed.
 
 | Deck finding | Fix in MedVault-PQ | Closes | Does **not** close |
 | --- | --- | --- | --- |
@@ -73,6 +80,7 @@ Numbering follows the mid-sem deck (findings 1–10).
 | 3 · Offline KGA, keeping PPSEB | Mode C, PAEKS-style: PPSEB's unchanged PEKS / Trapdoor / Verify on `HMAC(K_pd, keyword)`, with `K_pd` the per-doctor per-epoch key from the ML-KEM envelope | With the trapdoor **on-chain** and Verify **public**, outsider and keyless chain node 0/20 each (`repro.json → mode_tradeoff`). Revocation works through the key: a revoked doctor's request is accepted but matches nothing | Insider 17/20 (2 trapdoors fail on their own keyword, 1 false-positive Verify match: toy-parameter effects). Mode C authenticates keywords, not requests or ciphertexts: replay and planting still succeed. It is in the spirit of Huang–Li PAEKS (the deck's fix), not that pairing scheme, and has no proof. Same cost as mode A: ≈ 0.7–0.9 s per search, ≈ 5.9 KB per entry, vs mode B's 0.35 ms and 96 B |
 | 3 · Offline KGA, baseline | Mode A (PPSEB, toy n = 4, q = 257) | — | Measured as a rate over every dictionary keyword: the attack finds the keyword on every trial where the honest search works. The misses are trapdoors that fail Verify on their own keyword's ciphertext, a toy-parameter correctness failure the doctor suffers as well (deck: "the margin law") |
 | 5 · Universal-ciphertext forgery | (a) Mode B: no universal entry can exist, since an HMAC entry matches exactly one token; entry writes must carry the owning patient's signature. (b) Mode A′: PPSEB plus a cheap CT₂ shape check on writes (`medvault/wellformed.py`), the stopgap the deck names | (a) Outsider planting, and any "matches everything" entry in mode B. (b) The paper's canonical `CT₂ = 0` forgery and every forgery with a short CT₂ column; 0 honest ciphertexts refused (`repro.json → shape_check`) | As the deck says, **a signature proves who sent an entry, not that it is well formed**: a registered but malicious patient can still poison their own index. The shape check is necessary, not sufficient: it cannot tell an honest uniform-looking CT₂ from a dishonest one. Closing finding 5 for an open, public ledger needs a ZK well-formedness proof (design only) |
+| 6 · Access-pattern leakage | Mode B: the chain stores one commitment per search, never the trapdoor or the matched records; PIR hides retrieval from storage. Measured with the mid-sem Tier 1 / Tier 2 attacks, **unchanged**, on MedVault's own logs (`medvault/leakage.py`, 10 seeds, 20 records, 300 searches) | Chain observer. PPSEB-style mode A chain: Tier 1 groups 100 % pure, Tier 2 labels 0.715 of records vs chance 0.17 (10/10 seeds). Mode B chain: no record ever visible, Tier 2 0.19 vs chance 0.18 (0/10) | **The search node.** It still sees tokens and matches (R11.10): Tier 2 0.755, 10/10. Cover queries (real searches, scheduled to flatten keyword counts) lower that to 0.355 at 2× and 0.335 at 4× extra searches, still above chance in 4–5 of 10 seeds, and leave Tier 1 at 100 %: co-access and group sizes are untouched by frequency smoothing. Hiding co-access needs oblivious search (ORAM), design-only |
 | 7 · Replay | Signed, nonce-bound, epoch-checked **search and retrieval** requests; one per-doctor counter covers both; signatures are domain-separated | Re-sending a captured search (`reused_nonce`) and re-sending a captured fetch to pull the record again (`reused_nonce`); a search signature cannot be presented as a fetch signature | Nothing beyond the doctor's own device: a stolen signing key is out of scope |
 
 Neither needs network access. The circuit in `circuits/build/` is generated and

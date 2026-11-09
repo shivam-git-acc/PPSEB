@@ -436,26 +436,33 @@ def run_retrieval_replay(mode: str, *, config: MedVaultConfig | None = None) -> 
 # --------------------------------------------------------------------------
 
 def run_access_pattern(mode: str, *, config: MedVaultConfig | None = None) -> dict:
-    """Does the observable chain log reveal the search token?
+    """Does the observable chain log reveal the search token, or what matched?
 
-    Mode A writes the token itself into the on-chain log, which is the leak.
-    Mode B writes only SHA256(token ‖ nonce ‖ epoch).
+    Modes A and C model PPSEB's on-chain search: the trapdoor and the matching
+    record ids (PPSEB's step 4) are both in the public log. Mode B writes only
+    SHA256(token ‖ nonce ‖ epoch). The record-id check looks for the ids the
+    search actually returned — an earlier version looked for a string search
+    never writes, so it could not fail.
     """
     world = build_sandbox(mode, config)
     doctor = world.doctors["doctor_a"]
     request = doctor.build_request(world.index, "diabetes", nonce=1,
                                    timestamp=world.ledger.now())
-    world.submit_request(request)
+    result, _ = world.submit_request(request)
+    matched = result["record_ids"]
 
     log = world.ledger.chain_log()
     token_hex = request.token.hex()
     leaks = any(token_hex in str(entry) for entry in log)
+    search_records = [e for e in log if e.get("type") == "search_commitment_record"]
     return {
         "mode": mode,
         "token_on_chain": leaks,
+        "matched_record_ids": matched,
+        "record_ids_on_chain": bool(matched) and any(
+            set(matched) <= set(e.get("matched", [])) for e in search_records),
         "log_entries": len(log),
         "log_keys": sorted({key for entry in log for key in entry}),
-        "record_ids_on_chain": any("PLANTED" in str(entry) for entry in log),
     }
 
 
@@ -495,5 +502,6 @@ def run_all_attacks(config: MedVaultConfig | None = None, *, kga_rates: bool = F
             "plant_succeeds": {mode: plant[mode]["appears_in_search"]
                                for mode in plant_modes},
             "token_on_chain": {mode: access[mode]["token_on_chain"] for mode in modes},
+            "record_ids_on_chain": {mode: access[mode]["record_ids_on_chain"] for mode in modes},
         },
     }

@@ -179,6 +179,9 @@ class Gateway:
 
         record_ids = self.search_node.search(req.token, req.doctor_id, req.epoch,
                                              self.index)
+        if self.mode in ("A", "C") and hasattr(self.ledger, "record_search_result"):
+            # PPSEB runs the search on-chain, so its result is public too.
+            self.ledger.record_search_result(commitment, record_ids)
         trace.result(
             f"{len(record_ids)} record(s) matched",
             data={"record_ids": record_ids, "keyword_len": len(req.keyword)},

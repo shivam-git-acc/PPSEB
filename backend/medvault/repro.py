@@ -434,6 +434,17 @@ def run_repro(seed: int = 42, *, fast: bool = False) -> dict:
         for mode in ("A", "B")
     }
 
+    from .leakage import cover_query_curve, leakage_sweep
+    leak = leakage_sweep(seeds=1 if fast else 10)
+    leakage_result = {
+        "what": "Tier 1 / Tier 2 from attacks/ledger.py (unchanged) on MedVault's own logs",
+        "records": leak["records"], "queries": leak["queries"],
+        "base_seed": leak["base_seed"], "summary": leak["summary"],
+        "cover_query_curve": cover_query_curve(
+            overheads=(0.0, 2.0) if fast else (0.0, 0.25, 0.5, 1.0, 2.0, 4.0),
+            seeds=1 if fast else 10),
+    }
+
     mode_costs = {mode: measure_mode_costs(config, mode, records=5 if fast else 10)
                   for mode in ("A", "B", "C")}
     tradeoff = mode_tradeoff_table(attacks, mode_costs, kga_trials)
@@ -469,9 +480,11 @@ def run_repro(seed: int = 42, *, fast: bool = False) -> dict:
         "retrieval_replay": retrieval_replay,
         "shape_check": shape_check,
         "mode_tradeoff": tradeoff,
+        "leakage": leakage_result,
         "access_pattern": {
             f"mode_{mode}": {
                 "token_on_chain": attacks["access_pattern"][mode]["token_on_chain"],
+                "record_ids_on_chain": attacks["access_pattern"][mode]["record_ids_on_chain"],
                 "log_entries": attacks["access_pattern"][mode]["log_entries"],
             }
             for mode in ("A", "B")
@@ -523,6 +536,7 @@ def deterministic_headline(result: dict) -> dict:
                            if k not in ("search_ms_per_query", "revocation_ms")}
                           for row in result["mode_tradeoff"]],
         "access_pattern": result["access_pattern"],
+        "leakage": result["leakage"],
         "storage_overhead": result["storage_overhead"],
         "lattice_params": result["meta"]["lattice_params"],
         "kem_label": result["meta"]["kem_label"],
@@ -565,6 +579,10 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  plant         mode A {result['replay_plant']['mode_A']['plant']}  "
           f"mode A′ {result['shape_check']['plant_mode_A_prime']['plant']}  "
           f"mode B {result['replay_plant']['mode_B']['plant']}")
+    for key, row in result["leakage"]["summary"].items():
+        print(f"  leakage {key:22s} Tier 2 {row['tier2_accuracy_mean']} vs chance "
+              f"{row['baseline_mean']} (beats {row['beats_baseline']}), "
+              f"Tier 1 purity {row['tier1_purity_mean']}")
     fr = result["shape_check"]["honest_false_rejects"]
     print(f"  shape check   {fr['false_rejects']}/{fr['samples']} honest ciphertexts refused")
     print(f"  fetch replay  mode A {result['retrieval_replay']['mode_A']['replay']}  "

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import time
 from pathlib import Path
 
 import pytest
@@ -78,13 +77,13 @@ def test_run_all_attacks_summary_is_the_before_after_table():
 # repro.sh's Python half
 # --------------------------------------------------------------------------
 
-def test_repro_writes_json_with_every_required_section(tmp_path):
-    result = repro.run_repro(42, fast=True)
+def test_repro_writes_json_with_every_required_section(tmp_path, fast_repro):
+    result, _ = fast_repro(42)
     path = repro.write_results(result, tmp_path / "repro.json")
     loaded = json.loads(Path(path).read_text(encoding="utf-8"))
 
     for key in ("meta", "kga_success", "kga_trials", "replay_plant", "retrieval_replay",
-                "shape_check", "access_pattern",
+                "shape_check", "mode_tradeoff", "leakage", "access_pattern",
                 "search_latency_ms", "storage_overhead", "revocation_cost",
                 "pir", "zk", "tree_evolution_norm", "gas_per_consent_event"):
         assert key in loaded
@@ -120,10 +119,9 @@ def test_archived_modules_are_still_runnable_separately():
         assert importlib.import_module(module) is not None
 
 
-def test_repro_finishes_inside_the_time_budget():
-    started = time.time()
-    result = repro.run_repro(42, fast=True)
-    assert time.time() - started < 600
+def test_repro_finishes_inside_the_time_budget(fast_repro):
+    result, wall_clock = fast_repro(42)
+    assert wall_clock < 600
     assert result["meta"]["elapsed_s"] < 600
 
 
@@ -132,16 +130,16 @@ def test_repro_finishes_inside_the_time_budget():
 # --------------------------------------------------------------------------
 
 # Feature: medvault-pq, Property 25: Repro determinism
-def test_property_25_same_seed_same_headline_values():
-    first = repro.run_repro(42, fast=True)
-    second = repro.run_repro(42, fast=True)
+def test_property_25_same_seed_same_headline_values(fast_repro):
+    first, _ = fast_repro(42)
+    second = repro.run_repro(42, fast=True)     # a genuinely fresh second run
     assert repro.deterministic_headline(first) == repro.deterministic_headline(second)
 
 
-def test_a_different_seed_changes_the_fingerprint_but_not_the_outcomes():
+def test_a_different_seed_changes_the_fingerprint_but_not_the_outcomes(fast_repro):
     """The seed changes bytes, not the security outcomes the demo claims."""
-    base = repro.deterministic_headline(repro.run_repro(42, fast=True))
-    other = repro.deterministic_headline(repro.run_repro(1234, fast=True))
+    base = repro.deterministic_headline(fast_repro(42)[0])
+    other = repro.deterministic_headline(fast_repro(1234)[0])
     assert base["kga_success"] == other["kga_success"]
     assert base["replay_plant"]["mode_B"]["replay"] is False
     assert base["storage_overhead"]["index_entry_bytes"] == \
@@ -164,8 +162,8 @@ def test_latency_rows_carry_their_grid_position():
 
 
 @pytest.mark.parametrize("mode,expect_leak", [("A", True), ("B", False)])
-def test_repro_access_pattern_matches_the_harness(mode, expect_leak):
-    result = repro.run_repro(42, fast=True)
+def test_repro_access_pattern_matches_the_harness(mode, expect_leak, fast_repro):
+    result, _ = fast_repro(42)
     assert result["access_pattern"][f"mode_{mode}"]["token_on_chain"] is expect_leak
 
 
