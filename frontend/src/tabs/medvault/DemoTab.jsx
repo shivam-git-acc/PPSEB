@@ -111,7 +111,23 @@ export default function DemoTab() {
       {report?.replayed && (
         <div className="text-2xs text-signal-amber bg-signal-amber/10 ring-1 ring-inset ring-signal-amber/30 rounded-lg px-3 py-2">
           Replayed from a saved JSON trace — these events were recorded by an earlier run and
-          were not re-executed now. Saved file: <span className="mono">{report.replayed_from}</span>
+          were not re-executed now. Source: <span className="mono">{report.replayed_from}</span>
+          {report.replayed_source === "bundled" && (
+            <span className="block mt-1">
+              The backend could not be reached (<span className="mono">{report.backend_error}</span>),
+              so this is the golden run bundled with the UI.
+            </span>
+          )}
+        </div>
+      )}
+
+      {report?.trace_saved && (
+        <div className="text-2xs text-ink-400 rounded-lg ring-1 ring-inset ring-ink-800 px-3 py-2">
+          Saved as the latest run.{" "}
+          {report.trace_saved.promoted
+            ? "It also replaced the golden replay trace"
+            : "The golden replay trace was kept"}{" "}
+          ({report.trace_saved.reason}).
         </div>
       )}
 

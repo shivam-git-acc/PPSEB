@@ -151,9 +151,25 @@ def test_audit_endpoint_exposes_chain_without_tokens(client):
     assert token_hex not in str(payload["chain"])
 
 
-def test_demo_endpoint_runs_the_whole_sequence(client):
+@pytest.fixture
+def trace_paths(tmp_path, monkeypatch):
+    """Point the demo's trace files at a temporary folder.
+
+    Without this, running the suite rewrote the committed golden trace.
+    """
+    from medvault import demo
+    golden, latest = tmp_path / "demo_trace.json", tmp_path / "demo_trace.latest.json"
+    monkeypatch.setattr(demo, "GOLDEN_TRACE", golden)
+    monkeypatch.setattr(demo, "LATEST_TRACE", latest)
+    return golden, latest
+
+
+def test_demo_endpoint_runs_the_whole_sequence(client, trace_paths):
     response = client.post("/api/medvault/system/demo-run?seed=42")
     report = response.json()["result"]
+    golden, latest = trace_paths
+    assert latest.exists() and golden.exists()
+    assert report["trace_saved"]["promoted"] is True
     assert report["all_passed"] is True
     assert report["graded"] == 9     # all nine steps, none parked as pending
     assert report["pending"] == []
@@ -161,6 +177,24 @@ def test_demo_endpoint_runs_the_whole_sequence(client):
     assert all(step["ok"] for step in report["steps"])
     # Whatever mode the machine can run, the report names it honestly.
     assert "Groth16" in report["proof_mode"] or "not zero knowledge" in report["proof_mode"]
+
+
+def test_demo_trace_endpoint_serves_golden_and_latest_separately(client, trace_paths):
+    from medvault.demo import save_report
+    golden, latest = trace_paths
+    assert client.get("/api/medvault/system/demo-trace").status_code == 404
+
+    save_report({"steps": [], "passed": 9, "graded": 9, "all_passed": True,
+                 "pending": []}, golden)
+    save_report({"steps": [], "passed": 7, "graded": 9, "all_passed": False,
+                 "pending": []}, latest)
+
+    body = client.get("/api/medvault/system/demo-trace").json()
+    envelope_shape(body)
+    assert body["result"]["passed"] == 9 and body["result"]["replayed_source"] == "golden"
+    body = client.get("/api/medvault/system/demo-trace?source=latest").json()
+    assert body["result"]["passed"] == 7 and body["result"]["replayed_source"] == "latest"
+    assert client.get("/api/medvault/system/demo-trace?source=other").status_code == 422
 
 
 @pytest.mark.skipif(not ZKAuthorisation.available(),

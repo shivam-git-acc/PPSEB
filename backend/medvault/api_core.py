@@ -20,7 +20,8 @@ from pydantic import BaseModel, Field
 
 from .config import MedVaultConfig, library_versions
 from .consent import ConsentError
-from .demo import FIGURES, collect_traces, load_report, run_demo, save_report
+from . import demo as demo_module
+from .demo import FIGURES, collect_traces, load_report, record_run, run_demo
 from .envelope import Scope
 from .harness import ATTACKER_MODELS, run_access_pattern, run_kga, run_plant, run_replay
 from .key_tree import KeyTree, KeyTreeConfig
@@ -340,17 +341,26 @@ def eval_tables(full: bool = False):
 def demo_run(seed: int = 42):
     """The whole sequence in one call (Requirement 13.14, no manual steps)."""
     report = run_demo(MedVaultConfig(seed=seed))
-    save_report(report)  # R13.11: the run is replayable from disk afterwards
+    # R13.11: always saved as "latest"; the golden backup moves only on a clean pass.
+    saved = record_run(report)
     SESSION["world"] = build_world(MedVaultConfig(seed=seed, zk_mode="auto"))
-    return _envelope({k: v for k, v in report.items() if k != "state"}, [], SESSION["world"])
+    result = {k: v for k, v in report.items() if k != "state"}
+    result["trace_saved"] = {"promoted": saved["promoted"], "reason": saved["reason"]}
+    return _envelope(result, [], SESSION["world"])
 
 
 @router.get("/system/demo-trace")
-def demo_trace():
-    """The saved traces from the last run, replayable without re-executing (R13.11)."""
-    report = load_report()
+def demo_trace(source: Literal["golden", "latest"] = "golden"):
+    """A saved run, replayable without re-executing (R13.11).
+
+    `golden` is the pinned, known-good run; `latest` is the most recent live run,
+    which may have failed.
+    """
+    report = load_report(demo_module.GOLDEN_TRACE if source == "golden"
+                         else demo_module.LATEST_TRACE)
     if report is None:
-        raise HTTPException(404, "no saved trace yet: run the demo once")
+        raise HTTPException(404, f"no {source} trace saved yet: run the demo once")
+    report["replayed_source"] = source
     return _envelope(report, [], _world())
 
 

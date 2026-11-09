@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import os
 import time
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
@@ -341,25 +342,60 @@ def run_demo(config: MedVaultConfig | None = None, *, world: DemoWorld | None = 
 # --------------------------------------------------------------------------
 
 RESULTS = Path(__file__).resolve().parent.parent / "results"
-DEFAULT_TRACE = RESULTS / "demo_trace.json"
+# The golden trace is committed and is what a replay shows. It is the backup for
+# a live demo that fails, so a failing run must never be able to replace it.
+GOLDEN_TRACE = RESULTS / "demo_trace.json"
+# Every live run lands here (gitignored), pass or fail, so nothing is lost.
+LATEST_TRACE = RESULTS / "demo_trace.latest.json"
+DEFAULT_TRACE = GOLDEN_TRACE  # kept for callers that predate the split
 
 
-def save_report(report: dict, output: Path = DEFAULT_TRACE) -> Path:
+def save_report(report: dict, output: Path | None = None) -> Path:
     """Write the whole demo, traces included, as one JSON file.
 
-    Requirement 13.11: if the live run fails on the day, the traces must be
-    replayable from disk. Saving them is the only way that is true, so the demo
-    writes this file every time it runs.
+    The write is atomic (temporary file, then rename), so an interrupted run
+    leaves the previous file intact rather than a truncated one.
     """
+    output = LATEST_TRACE if output is None else output
     output.parent.mkdir(parents=True, exist_ok=True)
     payload = {k: v for k, v in report.items() if k != "state"}
     payload["saved_by"] = "medvault.demo"
-    output.write_text(json.dumps(payload, indent=1), encoding="utf-8")
+    tmp = output.with_name(output.name + ".tmp")
+    tmp.write_text(json.dumps(payload, indent=1), encoding="utf-8")
+    os.replace(tmp, output)
     return output
 
 
-def load_report(path: Path = DEFAULT_TRACE) -> dict | None:
-    """The saved report, or None when nothing has been recorded yet."""
+def promotable(report: dict) -> tuple[bool, str]:
+    """May this run replace the golden trace? Only a clean, complete pass may."""
+    if not report.get("all_passed"):
+        return False, f"{report.get('passed')}/{report.get('graded')} graded steps passed"
+    if report.get("pending"):
+        return False, f"steps pending: {', '.join(map(str, report['pending']))}"
+    return True, "all graded steps passed, none pending"
+
+
+def record_run(report: dict, *, latest: Path | None = None,
+               golden: Path | None = None) -> dict:
+    """Save a live run (Requirement 13.11).
+
+    Always writes `latest`. Replaces `golden` only when `promotable`, so a demo
+    that breaks on the day cannot overwrite the backup it would fall back to.
+    """
+    # Resolved at call time, so tests can point both at a temporary folder.
+    latest = LATEST_TRACE if latest is None else latest
+    golden = GOLDEN_TRACE if golden is None else golden
+    save_report(report, latest)
+    promote, why = promotable(report)
+    if promote:
+        save_report(report, golden)
+    return {"latest": str(latest), "golden": str(golden),
+            "promoted": promote, "reason": why}
+
+
+def load_report(path: Path | None = None) -> dict | None:
+    """The saved report (golden by default), or None when nothing is recorded yet."""
+    path = GOLDEN_TRACE if path is None else path
     if not path.exists():
         return None
     try:
@@ -375,14 +411,20 @@ def main(argv: list[str] | None = None) -> int:
     """`python -m medvault.demo` runs the sequence and saves its traces."""
     parser = argparse.ArgumentParser(description="Run the MedVault-PQ demo and save its traces")
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--output", type=Path, default=DEFAULT_TRACE)
+    parser.add_argument("--output", type=Path, default=None,
+                        help="write only this file; default: latest, and golden on a clean pass")
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args(argv)
 
     report = run_demo(MedVaultConfig(seed=args.seed))
-    path = save_report(report, args.output)
+    if args.output is not None:
+        saved = f"wrote {save_report(report, args.output)}"
+    else:
+        info = record_run(report)
+        saved = (f"wrote {info['latest']}; golden "
+                 f"{'updated' if info['promoted'] else 'kept'} ({info['reason']})")
     if not args.quiet:
-        print(f"wrote {path}")
+        print(saved)
         print(f"  {report['passed']}/{report['graded']} graded steps passed in "
               f"{report['elapsed_s']}s ({report['proof_mode']})")
         for step in report["steps"]:

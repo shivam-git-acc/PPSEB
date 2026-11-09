@@ -19,7 +19,7 @@ import time
 import pytest
 
 from medvault.config import MedVaultConfig
-from medvault.demo import load_report, save_report
+from medvault.demo import load_report, record_run, save_report
 from medvault.envelope import Scope
 from medvault.harness import run_all_attacks
 from medvault.key_tree import KeyTree, KeyTreeConfig
@@ -227,6 +227,44 @@ def test_a_saved_demo_can_be_replayed_without_rerunning_it(tmp_path):
     # The saved file is what the UI reads, so it must not carry the live state
     # (which contains keys' public halves and would be stale anyway).
     assert "state" not in json.loads(path.read_text())
+
+
+def _report(passed: int, graded: int = 9, pending: list | None = None) -> dict:
+    return {"steps": [], "passed": passed, "graded": graded, "pending": pending or [],
+            "all_passed": passed == graded and not pending, "elapsed_s": 1.0,
+            "proof_mode": "test"}
+
+
+def test_a_failing_run_never_replaces_the_golden_trace(tmp_path):
+    """R13.11: the backup must survive the live demo breaking on the day."""
+    golden, latest = tmp_path / "golden.json", tmp_path / "latest.json"
+    save_report(_report(9), golden)
+    before = golden.read_bytes()
+
+    info = record_run(_report(8), latest=latest, golden=golden)
+
+    assert info["promoted"] is False and "8/9" in info["reason"]
+    assert golden.read_bytes() == before            # byte-identical
+    assert json.loads(latest.read_text())["passed"] == 8   # the failure is still kept
+
+
+def test_a_run_with_pending_steps_keeps_the_golden_trace(tmp_path):
+    golden, latest = tmp_path / "golden.json", tmp_path / "latest.json"
+    save_report(_report(9), golden)
+    before = golden.read_bytes()
+    report = _report(8, graded=8, pending=[4])
+    report["all_passed"] = True                    # graded steps passed, one parked
+    info = record_run(report, latest=latest, golden=golden)
+    assert info["promoted"] is False and "pending" in info["reason"]
+    assert golden.read_bytes() == before
+
+
+def test_a_clean_pass_replaces_the_golden_trace(tmp_path):
+    golden, latest = tmp_path / "golden.json", tmp_path / "latest.json"
+    info = record_run(_report(9), latest=latest, golden=golden)
+    assert info["promoted"] is True
+    assert golden.read_bytes() == latest.read_bytes()
+    assert not list(tmp_path.glob("*.tmp"))        # atomic write leaves no debris
 
 
 def test_a_missing_saved_trace_is_not_an_exception(tmp_path):

@@ -1,4 +1,26 @@
+// The pinned, known-good demo run, served by Vite as a static file (not bundled
+// into the JS). Used only when the backend cannot be reached (R13.11).
+import goldenTraceUrl from "../../backend/results/demo_trace.json?url";
+
 const BASE = "/api";
+
+// Same envelope shape as the API, so the Demo tab cannot tell the sources apart
+// except through the replayed_source / replayed_from fields it displays.
+async function staticDemoTrace(backendError) {
+  const res = await fetch(goldenTraceUrl);
+  if (!res.ok) throw new Error(`backend unreachable (${backendError}) and no bundled trace`);
+  const report = await res.json();
+  return {
+    result: {
+      ...report,
+      replayed: true,
+      replayed_source: "bundled",
+      replayed_from: "the copy bundled with the UI (backend/results/demo_trace.json at build time)",
+      backend_error: backendError,
+    },
+    trace: [],
+  };
+}
 
 async function post(path, body) {
   const res = await fetch(`${BASE}${path}`, {
@@ -14,10 +36,12 @@ async function post(path, body) {
   return data;
 }
 
-async function get(path) {
-  const res = await fetch(`${BASE}${path}`);
+async function get(path, { timeoutMs } = {}) {
+  // A hung backend must not hang the caller when it has a fallback (timeoutMs).
+  const signal = timeoutMs ? AbortSignal.timeout(timeoutMs) : undefined;
+  const res = await fetch(`${BASE}${path}`, { signal });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data?.error || res.statusText);
+  if (!res.ok) throw new Error(data?.error || data?.detail || res.statusText || `HTTP ${res.status}`);
   return data;
 }
 
@@ -76,7 +100,13 @@ export const api = {
   mvTables: (full = false) => get(`/medvault/eval/tables?full=${full ? "true" : "false"}`),
   mvMeta: () => get("/medvault/system/meta"),
   mvDemo: (seed = 42) => post(`/medvault/system/demo-run?seed=${seed}`, {}),
-  mvDemoTrace: () => get("/medvault/system/demo-trace"),
+  mvDemoTrace: async () => {
+    try {
+      return await get("/medvault/system/demo-trace?source=golden", { timeoutMs: 5000 });
+    } catch (e) {
+      return staticDemoTrace(String(e.message || e));
+    }
+  },
   mvZk: () => get("/medvault/zk/status"),
   mvTree: (body) => post("/medvault/tree/advance", body),
   mvChain: () => get("/medvault/chain/status"),
