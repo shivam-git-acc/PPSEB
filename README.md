@@ -21,14 +21,49 @@ three concrete findings against it:
 The full build specification — architecture, the exact corrected crypto, the
 trace format, and the UI — lives in [`CLAUDE.md`](CLAUDE.md).
 
+A system layer built on top of this lab, **MedVault-PQ**, is included: a
+patient-controlled, searchable share of medical records whose five defensive
+mechanisms each close one of the findings above. It is the first tab group in
+the UI (Demo / Patient / Doctor / Auditor / Evidence) and lives in
+`backend/medvault/`. Its tracker, claims policy and measured numbers are in
+[`../task.md`](../task.md) and
+[`backend/results/summary.md`](backend/results/summary.md).
+
 ## Project layout
 
 ```
 backend/    Python (FastAPI) — the lattice crypto + the three attacks
+            medvault/ — the system layer (M1-M8) and its tests in tests/medvault/
 frontend/   React (Vite) + Tailwind — the lab UI
+circuits/   M6 — Circom circuit + snarkjs/Groth16 dev setup (generated build/)
+contracts/  M4/M6 — ConsentRegistry.sol on a local Hardhat chain (opt-in)
 ```
 
 ## Running
+
+### Entire MedVault-PQ demo in one command (Windows)
+
+```bat
+start.cmd                 :: backend + frontend, in-process ledger
+start.cmd --with-chain    :: also a local Hardhat chain, so gas is measured
+```
+
+Then open `http://localhost:5173`; the **MedVault** group is the first tab group
+and **Demo** runs all nine steps in one call. The same sequence from the command
+line:
+
+```bash
+cd backend
+python -m medvault.demo          # nine steps, writes results/demo_trace.json
+python -m medvault.repro         # every evaluation table, writes results/repro.json
+```
+
+Neither needs network access. The circuit in `circuits/build/` is generated and
+gitignored; rebuild it with `npm --prefix circuits install && npm --prefix
+circuits run build` (about a minute) if it is missing — without it the system
+falls back to the labelled signed consent mode. Gas needs a chain:
+`npm --prefix contracts install && npm --prefix contracts run compile`, then
+`npm --prefix contracts run node`.
 
 ### Backend
 
@@ -82,6 +117,20 @@ keyword verifies, non-matching rejects, record encrypt/decrypt round-trips,
 a noise-sweep correctness check), and all three findings (KGA recovery,
 forward-security norm table, paper-vs-corrected KeyExt), plus a FastAPI
 smoke test of the full happy path through every endpoint.
+
+The system layer has its own suite:
+
+```bash
+cd backend
+python -m pytest tests/medvault -q      # ~4.2 minutes, 175 passed (with a local chain)
+```
+
+`tests/medvault` covers properties 1-25: AES-GCM and Merkle fail-closed
+behaviour, ML-KEM envelope sealing, keyed search and the five gateway gates,
+consent and revocation, PIR round trips and server-view regressions, real
+Groth16 proofs (including nullifier reuse), the lattice epoch tree, the attack
+harness, traceability per finding, and the nine-step demo. The eight chain tests
+skip when no local node is running; everything else runs offline.
 
 ## Notes on the crypto
 

@@ -894,6 +894,17 @@ async def api_proof_analysis_get():
 
 
 
+# --------------------------------------------------------------------------
+# MedVault-PQ — the system layer built on this lab (M1-M9)
+# --------------------------------------------------------------------------
+# Additive: the routes below live under /api/medvault and share nothing with the
+# research endpoints above. The PPSEB scheme, attack and sweep tabs behave
+# exactly as before; the lab stays the baseline and the attack target.
+from medvault.api_core import router as medvault_router
+
+app.include_router(medvault_router)
+
+
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request, exc):
     from fastapi.responses import JSONResponse

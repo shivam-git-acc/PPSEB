@@ -6,6 +6,11 @@ pydantic>=2.6
 pytest>=8.0
 httpx>=0.27
 
+# MedVault-PQ system layer (M1-M9): AES-256-GCM, HKDF-SHA-256 and Ed25519 come
+# from `cryptography`; the property tests in tests/medvault use `hypothesis`.
+cryptography>=42,<47
+hypothesis>=6.98,<7
+
 # Optional (PATCH 03 Lever 2): real BKZ reduction for the forward-security
 # scaling sweep's LEGITIMATE-basis re-reduction. attacks.forward_sec falls
 # back to its own LLL(delta=0.99) automatically if these aren't installed —

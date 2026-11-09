@@ -1,0 +1,15 @@
+{
+  "name": "medvault-circuits",
+  "private": true,
+  "version": "0.1.0",
+  "description": "M6 zero-knowledge authorisation: Circom circuit, dev Groth16 setup, prover/verifier helper",
+  "scripts": {
+    "build": "node build.js"
+  },
+  "dependencies": {
+    "circom2": "0.2.23",
+    "circomlib": "2.0.5",
+    "circomlibjs": "0.1.7",
+    "snarkjs": "0.7.6"
+  }
+}

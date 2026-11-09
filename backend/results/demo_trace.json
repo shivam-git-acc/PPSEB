@@ -1,0 +1,2281 @@
+{
+ "steps": [
+  {
+   "index": 1,
+   "title": "KGA, plant and replay on the original PPSEB",
+   "ok": true,
+   "result": {
+    "kga": {
+     "mode": "A",
+     "attacker": "outsider",
+     "success": true,
+     "success_rate_pct": 100.0,
+     "recovered_keyword": "hypertension",
+     "guesses_tried": 3,
+     "dictionary_size": 10,
+     "blocked": false,
+     "method": "public PEKS.Encrypt + Verify against the captured token",
+     "evidence": [
+      {
+       "guess": "diabetes",
+       "match": false
+      },
+      {
+       "guess": "asthma",
+       "match": false
+      },
+      {
+       "guess": "hypertension",
+       "match": true
+      }
+     ],
+     "params": {
+      "n": 4,
+      "q": 257,
+      "sigma": 4.0,
+      "l": 10
+     },
+     "trace": [
+      {
+       "step": 1,
+       "type": "threat_model",
+       "title": "Threat model: the doctor's trapdoor is a blockchain transaction",
+       "detail": "PPSEB moves the search step on-chain for auditability: the doctor submits Trap as a transaction so a consensus node can run Verify. That means every node (and any observer of the chain) sees Trap in the clear \u2014 no compromise of the doctor's device is needed.",
+       "data": {
+        "attacker_has": [
+         "pk_rj (public key)",
+         "mu (public encryption parameter)",
+         "the captured trapdoor",
+         "a keyword dictionary"
+        ],
+        "attacker_lacks": [
+         "sk_rj (the doctor's secret trapdoor basis)"
+        ]
+       },
+       "algo": "KGA",
+       "highlight": true
+      },
+      {
+       "step": 2,
+       "type": "note",
+       "title": "Why this works: PEKS.Encrypt and Verify are both PUBLIC algorithms",
+       "detail": "PEKS.Encrypt(pk_rj, guess, j) needs no secret at all (that's the point of a public-key scheme: anyone can encrypt). Verify(CT, Trap) needs no secret either. An attacker can therefore re-encrypt every dictionary word exactly as the real sender would, and test each one against the captured trapdoor exactly as the real search node would.",
+       "data": {},
+       "algo": "KGA",
+       "highlight": false
+      },
+      {
+       "step": 3,
+       "type": "decision",
+       "title": "Tested guess 'diabetes'",
+       "detail": "",
+       "data": {
+        "verdict": "no match",
+        "guess": "diabetes",
+        "match": false
+       },
+       "algo": "KGA",
+       "highlight": true
+      },
+      {
+       "step": 4,
+       "type": "decision",
+       "title": "Tested guess 'asthma'",
+       "detail": "",
+       "data": {
+        "verdict": "no match",
+        "guess": "asthma",
+        "match": false
+       },
+       "algo": "KGA",
+       "highlight": true
+      },
+      {
+       "step": 5,
+       "type": "decision",
+       "title": "Tested guess 'hypertension'",
+       "detail": "",
+       "data": {
+        "verdict": "MATCH",
+        "guess": "hypertension",
+        "match": true
+       },
+       "algo": "KGA",
+       "highlight": true
+      },
+      {
+       "step": 6,
+       "type": "result",
+       "title": "Keyword recovered: 'hypertension' \u2014 using only public data",
+       "detail": "",
+       "data": {
+        "recovered_keyword": "hypertension",
+        "guesses_tried": 3,
+        "dictionary_size": 10
+       },
+       "algo": "KGA",
+       "highlight": true
+      }
+     ]
+    },
+    "plant": {
+     "mode": "A",
+     "accepted": true,
+     "reason": "accepted",
+     "planted_record_id": "PLANTED",
+     "appears_in_search": true,
+     "record_ids": [
+      "PLANTED",
+      "rec-001"
+     ],
+     "constructed_as": "CT1 = floor(q/2), CT2 = 0 (matches every trapdoor)",
+     "params": {
+      "n": 4,
+      "q": 257
+     }
+    },
+    "replay": {
+     "mode": "A",
+     "first_ok": true,
+     "first_record_ids": [
+      "rec-001"
+     ],
+     "replay_ok": true,
+     "replay_reason": "accepted",
+     "replay_record_ids": [
+      "rec-001"
+     ],
+     "signature_covered": "06000000000000000100000000000000",
+     "params": {
+      "mode": "A",
+      "nonce": 1,
+      "epoch": 0
+     },
+     "trace": [
+      {
+       "step": 1,
+       "type": "note",
+       "title": "Gateway checks (mode A)",
+       "detail": "gates: none \u2014 this is the finding",
+       "data": {
+        "mode": "A",
+        "gates": [],
+        "note": "mode A is the baseline: no requester authentication, so a captured token is replayable by construction"
+       },
+       "algo": "Gateway",
+       "highlight": false
+      },
+      {
+       "step": 2,
+       "type": "decision",
+       "title": "All gates passed \u2014 searching",
+       "detail": "",
+       "data": {
+        "verdict": "ACCEPTED",
+        "mode": "A",
+        "nonce": 1,
+        "epoch": 0,
+        "commitment": "43d2e1c0c9455273"
+       },
+       "algo": "Gateway",
+       "highlight": true
+      },
+      {
+       "step": 3,
+       "type": "result",
+       "title": "1 record(s) matched",
+       "detail": "",
+       "data": {
+        "record_ids": [
+         "rec-001"
+        ],
+        "keyword_len": 8
+       },
+       "algo": "SearchNode",
+       "highlight": true
+      }
+     ],
+     "first_trace": [
+      {
+       "step": 1,
+       "type": "note",
+       "title": "Gateway checks (mode A)",
+       "detail": "gates: none \u2014 this is the finding",
+       "data": {
+        "mode": "A",
+        "gates": [],
+        "note": "mode A is the baseline: no requester authentication, so a captured token is replayable by construction"
+       },
+       "algo": "Gateway",
+       "highlight": false
+      },
+      {
+       "step": 2,
+       "type": "decision",
+       "title": "All gates passed \u2014 searching",
+       "detail": "",
+       "data": {
+        "verdict": "ACCEPTED",
+        "mode": "A",
+        "nonce": 1,
+        "epoch": 0,
+        "commitment": "43d2e1c0c9455273"
+       },
+       "algo": "Gateway",
+       "highlight": true
+      },
+      {
+       "step": 3,
+       "type": "result",
+       "title": "1 record(s) matched",
+       "detail": "",
+       "data": {
+        "record_ids": [
+         "rec-001"
+        ],
+        "keyword_len": 8
+       },
+       "algo": "SearchNode",
+       "highlight": true
+      }
+     ]
+    },
+    "access_pattern": {
+     "mode": "A",
+     "token_on_chain": true,
+     "log_entries": 8,
+     "log_keys": [
+      "commitment",
+      "data_hash",
+      "doctor",
+      "doctor_id",
+      "epoch",
+      "event_id",
+      "nonce",
+      "note",
+      "patient",
+      "public_token",
+      "timestamp",
+      "type"
+     ],
+     "record_ids_on_chain": false
+    }
+   },
+   "trace": [
+    {
+     "step": 1,
+     "type": "threat_model",
+     "title": "Threat model: the doctor's trapdoor is a blockchain transaction",
+     "detail": "PPSEB moves the search step on-chain for auditability: the doctor submits Trap as a transaction so a consensus node can run Verify. That means every node (and any observer of the chain) sees Trap in the clear \u2014 no compromise of the doctor's device is needed.",
+     "data": {
+      "attacker_has": [
+       "pk_rj (public key)",
+       "mu (public encryption parameter)",
+       "the captured trapdoor",
+       "a keyword dictionary"
+      ],
+      "attacker_lacks": [
+       "sk_rj (the doctor's secret trapdoor basis)"
+      ]
+     },
+     "algo": "KGA",
+     "highlight": true
+    },
+    {
+     "step": 2,
+     "type": "note",
+     "title": "Why this works: PEKS.Encrypt and Verify are both PUBLIC algorithms",
+     "detail": "PEKS.Encrypt(pk_rj, guess, j) needs no secret at all (that's the point of a public-key scheme: anyone can encrypt). Verify(CT, Trap) needs no secret either. An attacker can therefore re-encrypt every dictionary word exactly as the real sender would, and test each one against the captured trapdoor exactly as the real search node would.",
+     "data": {},
+     "algo": "KGA",
+     "highlight": false
+    },
+    {
+     "step": 3,
+     "type": "decision",
+     "title": "Tested guess 'diabetes'",
+     "detail": "",
+     "data": {
+      "verdict": "no match",
+      "guess": "diabetes",
+      "match": false
+     },
+     "algo": "KGA",
+     "highlight": true
+    },
+    {
+     "step": 4,
+     "type": "decision",
+     "title": "Tested guess 'asthma'",
+     "detail": "",
+     "data": {
+      "verdict": "no match",
+      "guess": "asthma",
+      "match": false
+     },
+     "algo": "KGA",
+     "highlight": true
+    },
+    {
+     "step": 5,
+     "type": "decision",
+     "title": "Tested guess 'hypertension'",
+     "detail": "",
+     "data": {
+      "verdict": "MATCH",
+      "guess": "hypertension",
+      "match": true
+     },
+     "algo": "KGA",
+     "highlight": true
+    },
+    {
+     "step": 6,
+     "type": "result",
+     "title": "Keyword recovered: 'hypertension' \u2014 using only public data",
+     "detail": "",
+     "data": {
+      "recovered_keyword": "hypertension",
+      "guesses_tried": 3,
+      "dictionary_size": 10
+     },
+     "algo": "KGA",
+     "highlight": true
+    },
+    {
+     "step": 7,
+     "type": "threat_model",
+     "title": "Threat model: the doctor's trapdoor is a blockchain transaction",
+     "detail": "PPSEB moves the search step on-chain for auditability: the doctor submits Trap as a transaction so a consensus node can run Verify. That means every node (and any observer of the chain) sees Trap in the clear \u2014 no compromise of the doctor's device is needed.",
+     "data": {
+      "attacker_has": [
+       "pk_rj (public key)",
+       "mu (public encryption parameter)",
+       "the captured trapdoor",
+       "a keyword dictionary"
+      ],
+      "attacker_lacks": [
+       "sk_rj (the doctor's secret trapdoor basis)"
+      ]
+     },
+     "algo": "KGA",
+     "highlight": true
+    },
+    {
+     "step": 8,
+     "type": "note",
+     "title": "Why this works: PEKS.Encrypt and Verify are both PUBLIC algorithms",
+     "detail": "PEKS.Encrypt(pk_rj, guess, j) needs no secret at all (that's the point of a public-key scheme: anyone can encrypt). Verify(CT, Trap) needs no secret either. An attacker can therefore re-encrypt every dictionary word exactly as the real sender would, and test each one against the captured trapdoor exactly as the real search node would.",
+     "data": {},
+     "algo": "KGA",
+     "highlight": false
+    },
+    {
+     "step": 9,
+     "type": "decision",
+     "title": "Tested guess 'diabetes'",
+     "detail": "",
+     "data": {
+      "verdict": "no match",
+      "guess": "diabetes",
+      "match": false
+     },
+     "algo": "KGA",
+     "highlight": true
+    },
+    {
+     "step": 10,
+     "type": "decision",
+     "title": "Tested guess 'asthma'",
+     "detail": "",
+     "data": {
+      "verdict": "no match",
+      "guess": "asthma",
+      "match": false
+     },
+     "algo": "KGA",
+     "highlight": true
+    },
+    {
+     "step": 11,
+     "type": "decision",
+     "title": "Tested guess 'hypertension'",
+     "detail": "",
+     "data": {
+      "verdict": "MATCH",
+      "guess": "hypertension",
+      "match": true
+     },
+     "algo": "KGA",
+     "highlight": true
+    },
+    {
+     "step": 12,
+     "type": "result",
+     "title": "Keyword recovered: 'hypertension' \u2014 using only public data",
+     "detail": "",
+     "data": {
+      "recovered_keyword": "hypertension",
+      "guesses_tried": 3,
+      "dictionary_size": 10
+     },
+     "algo": "KGA",
+     "highlight": true
+    },
+    {
+     "step": 13,
+     "type": "threat_model",
+     "title": "Threat model: the doctor's trapdoor is a blockchain transaction",
+     "detail": "PPSEB moves the search step on-chain for auditability: the doctor submits Trap as a transaction so a consensus node can run Verify. That means every node (and any observer of the chain) sees Trap in the clear \u2014 no compromise of the doctor's device is needed.",
+     "data": {
+      "attacker_has": [
+       "pk_rj (public key)",
+       "mu (public encryption parameter)",
+       "the captured trapdoor",
+       "a keyword dictionary"
+      ],
+      "attacker_lacks": [
+       "sk_rj (the doctor's secret trapdoor basis)"
+      ]
+     },
+     "algo": "KGA",
+     "highlight": true
+    },
+    {
+     "step": 14,
+     "type": "note",
+     "title": "Why this works: PEKS.Encrypt and Verify are both PUBLIC algorithms",
+     "detail": "PEKS.Encrypt(pk_rj, guess, j) needs no secret at all (that's the point of a public-key scheme: anyone can encrypt). Verify(CT, Trap) needs no secret either. An attacker can therefore re-encrypt every dictionary word exactly as the real sender would, and test each one against the captured trapdoor exactly as the real search node would.",
+     "data": {},
+     "algo": "KGA",
+     "highlight": false
+    },
+    {
+     "step": 15,
+     "type": "decision",
+     "title": "Tested guess 'diabetes'",
+     "detail": "",
+     "data": {
+      "verdict": "no match",
+      "guess": "diabetes",
+      "match": false
+     },
+     "algo": "KGA",
+     "highlight": true
+    },
+    {
+     "step": 16,
+     "type": "decision",
+     "title": "Tested guess 'asthma'",
+     "detail": "",
+     "data": {
+      "verdict": "no match",
+      "guess": "asthma",
+      "match": false
+     },
+     "algo": "KGA",
+     "highlight": true
+    },
+    {
+     "step": 17,
+     "type": "decision",
+     "title": "Tested guess 'hypertension'",
+     "detail": "",
+     "data": {
+      "verdict": "MATCH",
+      "guess": "hypertension",
+      "match": true
+     },
+     "algo": "KGA",
+     "highlight": true
+    },
+    {
+     "step": 18,
+     "type": "result",
+     "title": "Keyword recovered: 'hypertension' \u2014 using only public data",
+     "detail": "",
+     "data": {
+      "recovered_keyword": "hypertension",
+      "guesses_tried": 3,
+      "dictionary_size": 10
+     },
+     "algo": "KGA",
+     "highlight": true
+    },
+    {
+     "step": 19,
+     "type": "note",
+     "title": "Gateway checks (mode A)",
+     "detail": "gates: none \u2014 this is the finding",
+     "data": {
+      "mode": "A",
+      "gates": [],
+      "note": "mode A is the baseline: no requester authentication, so a captured token is replayable by construction"
+     },
+     "algo": "Gateway",
+     "highlight": false
+    },
+    {
+     "step": 20,
+     "type": "decision",
+     "title": "All gates passed \u2014 searching",
+     "detail": "",
+     "data": {
+      "verdict": "ACCEPTED",
+      "mode": "A",
+      "nonce": 1,
+      "epoch": 0,
+      "commitment": "43d2e1c0c9455273"
+     },
+     "algo": "Gateway",
+     "highlight": true
+    },
+    {
+     "step": 21,
+     "type": "result",
+     "title": "1 record(s) matched",
+     "detail": "",
+     "data": {
+      "record_ids": [
+       "rec-001"
+      ],
+      "keyword_len": 8
+     },
+     "algo": "SearchNode",
+     "highlight": true
+    }
+   ],
+   "pending": ""
+  },
+  {
+   "index": 2,
+   "title": "Patient uploads encrypted records and commits the Merkle root",
+   "ok": true,
+   "result": {
+    "records": [
+     {
+      "record_id": "rec-lab",
+      "content_hash": "36d7413bedafc6af37591c02b7e49352e72843470a0d62597b39cd67275a4da0",
+      "version": 1,
+      "ciphertext_bytes": 45,
+      "merkle_root": "b7106c9a3f99042213472db1b1a934c219501db9481e4185e52eb30f12760fbb",
+      "keywords": [
+       "diabetes",
+       "blood"
+      ],
+      "tag": "lab"
+     },
+     {
+      "record_id": "rec-cxr",
+      "content_hash": "469aba8e05ef1ae67428ca0d92e654477e250bc182cfe0a10f3923cd9652e3e1",
+      "version": 1,
+      "ciphertext_bytes": 45,
+      "merkle_root": "fc7e1566e54adccf333d292a7a4f3fdc9cf59138f5b4faa922238d6ee6888d29",
+      "keywords": [
+       "radiology"
+      ],
+      "tag": "radiology"
+     },
+     {
+      "record_id": "rec-rx",
+      "content_hash": "250c936c8ea70afcc63af5cd54d3188a0f61856b9d06328644eb0b5027231ebb",
+      "version": 1,
+      "ciphertext_bytes": 43,
+      "merkle_root": "f94b0441c44f51e7343b85f0ac06a2af33be2215921e676708ece74614d31bb7",
+      "keywords": [
+       "pharmacy"
+      ],
+      "tag": "pharmacy"
+     }
+    ],
+    "merkle_root": "f94b0441c44f51e7343b85f0ac06a2af33be2215921e676708ece74614d31bb7",
+    "version": 3
+   },
+   "trace": [
+    {
+     "step": 1,
+     "type": "compute",
+     "title": "Encrypt rec-rx under a fresh AES-256-GCM key",
+     "detail": "A new 256-bit DEK per record; the ciphertext is stored under SHA256(record_id \u2016 ciphertext) so a modified blob cannot pass as the committed one.",
+     "data": {
+      "record_id": "rec-rx",
+      "plaintext_bytes": 15,
+      "ciphertext_bytes": 43,
+      "version": 1,
+      "content_hash": "250c936c8ea70afcc63af5cd54d3188a"
+     },
+     "algo": "BlobStore",
+     "highlight": true
+    },
+    {
+     "step": 2,
+     "type": "matrix",
+     "title": "Merkle root over the patient's records",
+     "detail": "3 leaf/leaves, committed at snapshot 3",
+     "data": {
+      "name": "root",
+      "shape": [
+       32
+      ],
+      "preview": [
+       249,
+       75,
+       4,
+       65,
+       196,
+       79,
+       81,
+       231,
+       52,
+       59,
+       133,
+       240
+      ],
+      "truncated": true,
+      "frobenius_norm": 788.2264902932405
+     },
+     "algo": "Merkle",
+     "highlight": false
+    },
+    {
+     "step": 3,
+     "type": "result",
+     "title": "Record root committed on-chain",
+     "detail": "",
+     "data": {
+      "root": "f94b0441c44f51e7343b85f0ac06a2af",
+      "version": 3,
+      "leaf_count": 3
+     },
+     "algo": "Merkle",
+     "highlight": true
+    }
+   ],
+   "pending": ""
+  },
+  {
+   "index": 3,
+   "title": "Patient grants three doctors three different scopes",
+   "ok": true,
+   "result": {
+    "grants": [
+     {
+      "doctor_id": "doctor_a",
+      "scope": "record_tag[lab]",
+      "scope_hash": "4217bace3d9eb9b5178f9f0481124f2e3eda9f8b5f258773753469400c641f4e",
+      "expiry_seconds": 86400,
+      "epoch": 0,
+      "envelope": {
+       "epoch": 0,
+       "scope_hash": "4217bace3d9eb9b5",
+       "kem_label": "pure-python-ml-kem-768-NON-HARDENED",
+       "recipient_key_hash": "fd1a869b2ecb5c51",
+       "kem_ciphertext_bytes": 1088,
+       "sealed_payload_bytes": 333,
+       "total_bytes": 1421
+      },
+      "capability": {
+       "doctor_id": "doctor_a",
+       "patient_id": "patient_alice",
+       "epoch": 0,
+       "scope": "record_tag[lab]",
+       "dek_count": 1,
+       "zk_secret_present": true
+      },
+      "opened_by_recipient": true
+     },
+     {
+      "doctor_id": "doctor_b",
+      "scope": "record_tag[radiology]",
+      "scope_hash": "8413eb18406fd21dc5afff339f2ed824893a5dfb8fed806761a2b469d74c9bdd",
+      "expiry_seconds": 86400,
+      "epoch": 0,
+      "envelope": {
+       "epoch": 0,
+       "scope_hash": "8413eb18406fd21d",
+       "kem_label": "pure-python-ml-kem-768-NON-HARDENED",
+       "recipient_key_hash": "3850f443df9096d0",
+       "kem_ciphertext_bytes": 1088,
+       "sealed_payload_bytes": 339,
+       "total_bytes": 1427
+      },
+      "capability": {
+       "doctor_id": "doctor_b",
+       "patient_id": "patient_alice",
+       "epoch": 0,
+       "scope": "record_tag[radiology]",
+       "dek_count": 1,
+       "zk_secret_present": true
+      },
+      "opened_by_recipient": true
+     },
+     {
+      "doctor_id": "doctor_c",
+      "scope": "record_set[rec-rx]",
+      "scope_hash": "20da000efefcf0bbfc14f6c0f12d69176fbe0b6d0ffebdc296753f19f18362ce",
+      "expiry_seconds": 86400,
+      "epoch": 0,
+      "envelope": {
+       "epoch": 0,
+       "scope_hash": "20da000efefcf0bb",
+       "kem_label": "pure-python-ml-kem-768-NON-HARDENED",
+       "recipient_key_hash": "4fc34820e509adbd",
+       "kem_ciphertext_bytes": 1088,
+       "sealed_payload_bytes": 337,
+       "total_bytes": 1425
+      },
+      "capability": {
+       "doctor_id": "doctor_c",
+       "patient_id": "patient_alice",
+       "epoch": 0,
+       "scope": "record_set[rec-rx]",
+       "dek_count": 1,
+       "zk_secret_present": true
+      },
+      "opened_by_recipient": true
+     }
+    ],
+    "envelopes_open_only_for_their_owner": true
+   },
+   "trace": [
+    {
+     "step": 1,
+     "type": "note",
+     "title": "Grant doctor_c \u2192 record_set[rec-rx]",
+     "detail": "Expiry is a duration from issuance; the epoch pins the grant to the patient's current key period.",
+     "data": {
+      "patient_id": "patient_alice",
+      "doctor_id": "doctor_c",
+      "scope": "record_set[rec-rx]",
+      "scope_hash": "20da000efefcf0bb",
+      "expiry_seconds": 86400,
+      "epoch": 0,
+      "issued_at": 1700000013,
+      "active": true,
+      "revoked": false,
+      "break_glass": false
+     },
+     "algo": "ConsentRegistry",
+     "highlight": true
+    },
+    {
+     "step": 2,
+     "type": "decision",
+     "title": "Seal and deliver the capability to doctor_c",
+     "detail": "ML-KEM-768 encapsulation + HKDF-SHA-256 + AES-256-GCM. Only the holder of the doctor's secret key can open it.",
+     "data": {
+      "verdict": "OPENED",
+      "kem_label": "pure-python-ml-kem-768-NON-HARDENED",
+      "envelope_bytes": 1425,
+      "dek_count": 1,
+      "epoch": 0,
+      "recipient_key_hash": "4fc34820e509adbd"
+     },
+     "algo": "Envelope",
+     "highlight": true
+    },
+    {
+     "step": 3,
+     "type": "compute",
+     "title": "Index 1 entr(ies) for doctor_c at epoch 0",
+     "detail": "Entries are patient-signed; an unsigned or foreign entry is refused by the search node.",
+     "data": {
+      "accepted": 1,
+      "rejected": [],
+      "mode": "B"
+     },
+     "algo": "SearchNode",
+     "highlight": false
+    },
+    {
+     "step": 4,
+     "type": "note",
+     "title": "Consent root updated",
+     "detail": "",
+     "data": {
+      "root": "168e7f878e1bdf91b36ef28d758b3c8c771b562299d21f4445863c219a92685e",
+      "live_leaves": 3,
+      "proof_mode": "Groth16 BN254 \u2014 classical, single-party DEV setup"
+     },
+     "algo": "ZK",
+     "highlight": false
+    }
+   ],
+   "pending": ""
+  },
+  {
+   "index": 4,
+   "title": "Doctor A searches and retrieves, with integrity checked first",
+   "ok": true,
+   "result": {
+    "search": {
+     "ok": true,
+     "reason": "accepted",
+     "record_ids": [
+      "rec-lab"
+     ],
+     "keyword": "diabetes",
+     "nonce": 1,
+     "epoch": 0,
+     "mode": "B"
+    },
+    "retrieval": {
+     "ok": true,
+     "reason": "retrieved",
+     "record_id": "rec-lab",
+     "version": 1,
+     "content_hash": "36d7413bedafc6af37591c02b7e49352e72843470a0d62597b39cd67275a4da0",
+     "merkle_root": "f94b0441c44f51e7343b85f0ac06a2af33be2215921e676708ece74614d31bb7",
+     "pir": {
+      "hint_bytes": 16777224,
+      "query_bytes": 12,
+      "answer_bytes": 16384,
+      "server_ms": 0.03,
+      "db_rows": 3,
+      "params": {
+       "n": 1024,
+       "q": "2^32",
+       "p": 256,
+       "sigma": 6.4,
+       "db_rows": 3,
+       "slot_size": 4096
+      }
+     }
+    },
+    "proof": {
+     "kind": "groth16",
+     "label": "Groth16 BN254 \u2014 classical, single-party DEV setup",
+     "public_inputs": [
+      "root",
+      "nullifier",
+      "scope_id",
+      "epoch_tag"
+     ],
+     "public_input_count": 4,
+     "verify_ms": 234.07,
+     "private": [
+      "secret_s",
+      "pathElements",
+      "pathIndices",
+      "nonce"
+     ]
+    },
+    "reused_proof": {
+     "accepted": false,
+     "reason": "bad_proof"
+    }
+   },
+   "trace": [
+    {
+     "step": 1,
+     "type": "note",
+     "title": "doctor_a signs a search request",
+     "detail": "Ed25519 over (token, nonce, epoch, timestamp); the token itself is never written to the chain.",
+     "data": {
+      "nonce": 1,
+      "epoch": 0,
+      "mode": "B",
+      "token": "206f992c489573ca"
+     },
+     "algo": "SearchRequest",
+     "highlight": false
+    },
+    {
+     "step": 2,
+     "type": "note",
+     "title": "Gateway checks (mode B)",
+     "detail": "gates: signature, epoch, nonce, scope",
+     "data": {
+      "mode": "B",
+      "gates": [
+       "signature",
+       "epoch",
+       "nonce",
+       "scope",
+       "proof"
+      ],
+      "note": "mode B rejects a bad signature, a stale epoch, a reused or out-of-order nonce, and an out-of-scope request"
+     },
+     "algo": "Gateway",
+     "highlight": false
+    },
+    {
+     "step": 3,
+     "type": "decision",
+     "title": "Authorization proof verified",
+     "detail": "",
+     "data": {
+      "verdict": "VALID",
+      "label": "Groth16 BN254 \u2014 classical, single-party DEV setup",
+      "verification_ms": 234.06860000000003
+     },
+     "algo": "ZK",
+     "highlight": true
+    },
+    {
+     "step": 4,
+     "type": "decision",
+     "title": "All gates passed \u2014 searching",
+     "detail": "",
+     "data": {
+      "verdict": "ACCEPTED",
+      "mode": "B",
+      "nonce": 1,
+      "epoch": 0,
+      "commitment": "8b42afdc925e16ae"
+     },
+     "algo": "Gateway",
+     "highlight": true
+    },
+    {
+     "step": 5,
+     "type": "result",
+     "title": "1 record(s) matched",
+     "detail": "",
+     "data": {
+      "record_ids": [
+       "rec-lab"
+      ],
+      "keyword_len": 8
+     },
+     "algo": "SearchNode",
+     "highlight": true
+    },
+    {
+     "step": 6,
+     "type": "decision",
+     "title": "Authorise retrieval of rec-lab for doctor_a",
+     "detail": "",
+     "data": {
+      "verdict": "AUTHORISED",
+      "reason": "authorized",
+      "epoch": 0
+     },
+     "algo": "Gateway",
+     "highlight": true
+    },
+    {
+     "step": 7,
+     "type": "compute",
+     "title": "Private retrieval via LWE PIR",
+     "detail": "Storage sees encrypted query and sizes, not row index. Search node still sees matching IDs; collusion defeats privacy.",
+     "data": {
+      "hint_bytes": 16777224,
+      "query_bytes": 12,
+      "answer_bytes": 16384,
+      "server_ms": 0.03,
+      "db_rows": 3,
+      "params": {
+       "n": 1024,
+       "q": "2^32",
+       "p": 256,
+       "sigma": 6.4,
+       "db_rows": 3,
+       "slot_size": 4096
+      }
+     },
+     "algo": "PIR",
+     "highlight": false
+    },
+    {
+     "step": 8,
+     "type": "decision",
+     "title": "Integrity verified before decryption",
+     "detail": "Stale version, altered bytes, a bad proof and a root mismatch all stop here \u2014 before any DEK is used.",
+     "data": {
+      "verdict": "VERIFIED",
+      "content_hash": "36d7413bedafc6af37591c02b7e49352",
+      "version": 1,
+      "proof_depth": 2
+     },
+     "algo": "Merkle",
+     "highlight": true
+    },
+    {
+     "step": 9,
+     "type": "result",
+     "title": "Decrypted rec-lab",
+     "detail": "",
+     "data": {
+      "bytes": 17,
+      "record_id": "rec-lab"
+     },
+     "algo": "BlobStore",
+     "highlight": true
+    },
+    {
+     "step": 10,
+     "type": "note",
+     "title": "Gateway checks (mode B)",
+     "detail": "gates: signature, epoch, nonce, scope",
+     "data": {
+      "mode": "B",
+      "gates": [
+       "signature",
+       "epoch",
+       "nonce",
+       "scope",
+       "proof"
+      ],
+      "note": "mode B rejects a bad signature, a stale epoch, a reused or out-of-order nonce, and an out-of-scope request"
+     },
+     "algo": "Gateway",
+     "highlight": false
+    },
+    {
+     "step": 11,
+     "type": "decision",
+     "title": "Search rejected: bad_proof",
+     "detail": "Invalid proof, old root or reused nullifier",
+     "data": {
+      "verdict": "REJECTED",
+      "reason": "bad_proof",
+      "mode": "B"
+     },
+     "algo": "Gateway",
+     "highlight": true
+    }
+   ],
+   "pending": ""
+  },
+  {
+   "index": 5,
+   "title": "KGA, plant and replay on the hardened path",
+   "ok": true,
+   "result": {
+    "kga": {
+     "outsider": {
+      "mode": "B",
+      "attacker": "outsider",
+      "success": false,
+      "success_rate_pct": 0.0,
+      "recovered_keyword": null,
+      "guesses_tried": 10,
+      "dictionary_size": 10,
+      "blocked": true,
+      "method": "HMAC-SHA-256 without the key: a guess cannot be turned into a comparable token",
+      "evidence": [
+       {
+        "guess": "diabetes",
+        "match": false
+       },
+       {
+        "guess": "asthma",
+        "match": false
+       },
+       {
+        "guess": "hypertension",
+        "match": false
+       },
+       {
+        "guess": "migraine",
+        "match": false
+       },
+       {
+        "guess": "eczema",
+        "match": false
+       },
+       {
+        "guess": "gout",
+        "match": false
+       },
+       {
+        "guess": "anemia",
+        "match": false
+       },
+       {
+        "guess": "hepatitis",
+        "match": false
+       },
+       {
+        "guess": "psoriasis",
+        "match": false
+       },
+       {
+        "guess": "thyroiditis",
+        "match": false
+       }
+      ],
+      "params": {
+       "mode": "B",
+       "key_bytes": 32
+      },
+      "trace": []
+     },
+     "keyless_server": {
+      "mode": "B",
+      "attacker": "keyless_server",
+      "success": false,
+      "success_rate_pct": 0.0,
+      "recovered_keyword": null,
+      "guesses_tried": 10,
+      "dictionary_size": 10,
+      "blocked": true,
+      "method": "HMAC-SHA-256 without the key: a guess cannot be turned into a comparable token",
+      "evidence": [
+       {
+        "guess": "diabetes",
+        "match": false
+       },
+       {
+        "guess": "asthma",
+        "match": false
+       },
+       {
+        "guess": "hypertension",
+        "match": false
+       },
+       {
+        "guess": "migraine",
+        "match": false
+       },
+       {
+        "guess": "eczema",
+        "match": false
+       },
+       {
+        "guess": "gout",
+        "match": false
+       },
+       {
+        "guess": "anemia",
+        "match": false
+       },
+       {
+        "guess": "hepatitis",
+        "match": false
+       },
+       {
+        "guess": "psoriasis",
+        "match": false
+       },
+       {
+        "guess": "thyroiditis",
+        "match": false
+       }
+      ],
+      "params": {
+       "mode": "B",
+       "key_bytes": 32
+      },
+      "trace": []
+     },
+     "insider": {
+      "mode": "B",
+      "attacker": "insider",
+      "success": true,
+      "success_rate_pct": 100.0,
+      "recovered_keyword": "hypertension",
+      "guesses_tried": 3,
+      "dictionary_size": 10,
+      "blocked": false,
+      "method": "HMAC-SHA-256 under the per-doctor per-epoch key",
+      "evidence": [
+       {
+        "guess": "diabetes",
+        "match": false
+       },
+       {
+        "guess": "asthma",
+        "match": false
+       },
+       {
+        "guess": "hypertension",
+        "match": true
+       }
+      ],
+      "params": {
+       "mode": "B",
+       "key_bytes": 32
+      },
+      "trace": []
+     }
+    },
+    "plant": {
+     "mode": "B",
+     "accepted": false,
+     "reason": "unsigned_entry",
+     "planted_record_id": "PLANTED",
+     "appears_in_search": false,
+     "record_ids": [
+      "rec-001"
+     ],
+     "constructed_as": "unsigned entry written straight into the index",
+     "params": {
+      "mode": "B"
+     }
+    },
+    "replay": {
+     "mode": "B",
+     "first_ok": true,
+     "first_record_ids": [
+      "rec-001"
+     ],
+     "replay_ok": false,
+     "replay_reason": "reused_nonce",
+     "replay_record_ids": [],
+     "signature_covered": "206f992c489573ca660db4b7c0637fe1",
+     "params": {
+      "mode": "B",
+      "nonce": 1,
+      "epoch": 0
+     },
+     "trace": [
+      {
+       "step": 1,
+       "type": "note",
+       "title": "Gateway checks (mode B)",
+       "detail": "gates: signature, epoch, nonce, scope",
+       "data": {
+        "mode": "B",
+        "gates": [
+         "signature",
+         "epoch",
+         "nonce",
+         "scope",
+         "proof"
+        ],
+        "note": "mode B rejects a bad signature, a stale epoch, a reused or out-of-order nonce, and an out-of-scope request"
+       },
+       "algo": "Gateway",
+       "highlight": false
+      },
+      {
+       "step": 2,
+       "type": "decision",
+       "title": "Search rejected: reused_nonce",
+       "detail": "nonce 1 <= last accepted 1",
+       "data": {
+        "verdict": "REJECTED",
+        "reason": "reused_nonce",
+        "mode": "B"
+       },
+       "algo": "Gateway",
+       "highlight": true
+      }
+     ],
+     "first_trace": [
+      {
+       "step": 1,
+       "type": "note",
+       "title": "Gateway checks (mode B)",
+       "detail": "gates: signature, epoch, nonce, scope",
+       "data": {
+        "mode": "B",
+        "gates": [
+         "signature",
+         "epoch",
+         "nonce",
+         "scope",
+         "proof"
+        ],
+        "note": "mode B rejects a bad signature, a stale epoch, a reused or out-of-order nonce, and an out-of-scope request"
+       },
+       "algo": "Gateway",
+       "highlight": false
+      },
+      {
+       "step": 2,
+       "type": "decision",
+       "title": "Authorization proof verified",
+       "detail": "",
+       "data": {
+        "verdict": "VALID",
+        "label": "SIGNED CONSENT FALLBACK \u2014 not zero knowledge",
+        "verification_ms": 0.0
+       },
+       "algo": "ZK",
+       "highlight": true
+      },
+      {
+       "step": 3,
+       "type": "decision",
+       "title": "All gates passed \u2014 searching",
+       "detail": "",
+       "data": {
+        "verdict": "ACCEPTED",
+        "mode": "B",
+        "nonce": 1,
+        "epoch": 0,
+        "commitment": "8b42afdc925e16ae"
+       },
+       "algo": "Gateway",
+       "highlight": true
+      },
+      {
+       "step": 4,
+       "type": "result",
+       "title": "1 record(s) matched",
+       "detail": "",
+       "data": {
+        "record_ids": [
+         "rec-001"
+        ],
+        "keyword_len": 8
+       },
+       "algo": "SearchNode",
+       "highlight": true
+      }
+     ]
+    },
+    "access_pattern": {
+     "mode": "B",
+     "token_on_chain": false,
+     "log_entries": 8,
+     "log_keys": [
+      "commitment",
+      "data_hash",
+      "doctor",
+      "doctor_id",
+      "epoch",
+      "event_id",
+      "nonce",
+      "note",
+      "patient",
+      "timestamp",
+      "type"
+     ],
+     "record_ids_on_chain": false
+    }
+   },
+   "trace": [
+    {
+     "step": 1,
+     "type": "note",
+     "title": "Gateway checks (mode B)",
+     "detail": "gates: signature, epoch, nonce, scope",
+     "data": {
+      "mode": "B",
+      "gates": [
+       "signature",
+       "epoch",
+       "nonce",
+       "scope",
+       "proof"
+      ],
+      "note": "mode B rejects a bad signature, a stale epoch, a reused or out-of-order nonce, and an out-of-scope request"
+     },
+     "algo": "Gateway",
+     "highlight": false
+    },
+    {
+     "step": 2,
+     "type": "decision",
+     "title": "Search rejected: reused_nonce",
+     "detail": "nonce 1 <= last accepted 1",
+     "data": {
+      "verdict": "REJECTED",
+      "reason": "reused_nonce",
+      "mode": "B"
+     },
+     "algo": "Gateway",
+     "highlight": true
+    }
+   ],
+   "pending": ""
+  },
+  {
+   "index": 6,
+   "title": "Patient revokes Doctor A",
+   "ok": true,
+   "result": {
+    "revocation": {
+     "doctor_id": "doctor_a",
+     "new_epoch": 1,
+     "old_epoch": 0,
+     "remaining_doctors": [
+      "doctor_b",
+      "doctor_c"
+     ],
+     "cost": {
+      "time_ms": 15.547,
+      "transactions": 1,
+      "re_key_ops": 2,
+      "re_wrap_ops": 2,
+      "re_index_ops": 2,
+      "dropped_entries": 2,
+      "epoch": 1
+     }
+    },
+    "stale_search": {
+     "ok": false,
+     "reason": "stale_epoch",
+     "record_ids": [],
+     "keyword": "diabetes",
+     "nonce": 3,
+     "epoch": 0,
+     "mode": "B"
+    },
+    "stale_retrieval": {
+     "ok": false,
+     "reason": "stale_epoch",
+     "record_id": "rec-lab",
+     "plaintext": null
+    }
+   },
+   "trace": [
+    {
+     "step": 1,
+     "type": "decision",
+     "title": "Revoke doctor_a",
+     "detail": "The epoch increments, so every capability, token and request issued under the old epoch is now stale \u2014 without having to enumerate any of them.",
+     "data": {
+      "verdict": "REVOKED",
+      "old_epoch": 0,
+      "new_epoch": 1,
+      "timestamp": 1700000017
+     },
+     "algo": "ConsentRegistry",
+     "highlight": true
+    },
+    {
+     "step": 2,
+     "type": "note",
+     "title": "Erased doctor_a's index epochs below 1",
+     "detail": "",
+     "data": {
+      "dropped_entries": 2
+     },
+     "algo": "SearchNode",
+     "highlight": false
+    },
+    {
+     "step": 3,
+     "type": "compute",
+     "title": "Index 1 entr(ies) for doctor_b at epoch 1",
+     "detail": "Entries are patient-signed; an unsigned or foreign entry is refused by the search node.",
+     "data": {
+      "accepted": 1,
+      "rejected": [],
+      "mode": "B"
+     },
+     "algo": "SearchNode",
+     "highlight": false
+    },
+    {
+     "step": 4,
+     "type": "compute",
+     "title": "Index 1 entr(ies) for doctor_c at epoch 1",
+     "detail": "Entries are patient-signed; an unsigned or foreign entry is refused by the search node.",
+     "data": {
+      "accepted": 1,
+      "rejected": [],
+      "mode": "B"
+     },
+     "algo": "SearchNode",
+     "highlight": false
+    },
+    {
+     "step": 5,
+     "type": "note",
+     "title": "Consent root updated",
+     "detail": "",
+     "data": {
+      "root": "21dc53c8ddd2cea2ea76d673184c1c7dd99ff18a605431598a9ce527437c9408",
+      "live_leaves": 2,
+      "proof_mode": "Groth16 BN254 \u2014 classical, single-party DEV setup"
+     },
+     "algo": "ZK",
+     "highlight": false
+    },
+    {
+     "step": 6,
+     "type": "result",
+     "title": "Revocation cost measured",
+     "detail": "",
+     "data": {
+      "time_ms": 15.547,
+      "transactions": 1,
+      "re_key_ops": 2,
+      "re_wrap_ops": 2,
+      "re_index_ops": 2,
+      "dropped_entries": 2,
+      "epoch": 1
+     },
+     "algo": "ConsentRegistry",
+     "highlight": true
+    },
+    {
+     "step": 7,
+     "type": "note",
+     "title": "doctor_a signs a search request",
+     "detail": "Ed25519 over (token, nonce, epoch, timestamp); the token itself is never written to the chain.",
+     "data": {
+      "nonce": 3,
+      "epoch": 0,
+      "mode": "B",
+      "token": "206f992c489573ca"
+     },
+     "algo": "SearchRequest",
+     "highlight": false
+    },
+    {
+     "step": 8,
+     "type": "note",
+     "title": "Gateway checks (mode B)",
+     "detail": "gates: signature, epoch, nonce, scope",
+     "data": {
+      "mode": "B",
+      "gates": [
+       "signature",
+       "epoch",
+       "nonce",
+       "scope",
+       "proof"
+      ],
+      "note": "mode B rejects a bad signature, a stale epoch, a reused or out-of-order nonce, and an out-of-scope request"
+     },
+     "algo": "Gateway",
+     "highlight": false
+    },
+    {
+     "step": 9,
+     "type": "decision",
+     "title": "Search rejected: stale_epoch",
+     "detail": "request epoch 0, patient epoch 1",
+     "data": {
+      "verdict": "REJECTED",
+      "reason": "stale_epoch",
+      "mode": "B"
+     },
+     "algo": "Gateway",
+     "highlight": true
+    }
+   ],
+   "pending": ""
+  },
+  {
+   "index": 7,
+   "title": "Doctor B still works inside their own scope",
+   "ok": true,
+   "result": {
+    "search": {
+     "ok": true,
+     "reason": "accepted",
+     "record_ids": [
+      "rec-cxr"
+     ],
+     "keyword": "radiology",
+     "nonce": 1,
+     "epoch": 1,
+     "mode": "B"
+    },
+    "retrieval": {
+     "ok": true,
+     "reason": "retrieved",
+     "record_id": "rec-cxr",
+     "version": 1,
+     "content_hash": "469aba8e05ef1ae67428ca0d92e654477e250bc182cfe0a10f3923cd9652e3e1",
+     "merkle_root": "f94b0441c44f51e7343b85f0ac06a2af33be2215921e676708ece74614d31bb7",
+     "pir": {
+      "hint_bytes": 16777224,
+      "query_bytes": 12,
+      "answer_bytes": 16384,
+      "server_ms": 0.035,
+      "db_rows": 3,
+      "params": {
+       "n": 1024,
+       "q": "2^32",
+       "p": 256,
+       "sigma": 6.4,
+       "db_rows": 3,
+       "slot_size": 4096
+      }
+     }
+    }
+   },
+   "trace": [
+    {
+     "step": 1,
+     "type": "note",
+     "title": "doctor_b signs a search request",
+     "detail": "Ed25519 over (token, nonce, epoch, timestamp); the token itself is never written to the chain.",
+     "data": {
+      "nonce": 1,
+      "epoch": 1,
+      "mode": "B",
+      "token": "055f79ebb3a4950e"
+     },
+     "algo": "SearchRequest",
+     "highlight": false
+    },
+    {
+     "step": 2,
+     "type": "note",
+     "title": "Gateway checks (mode B)",
+     "detail": "gates: signature, epoch, nonce, scope",
+     "data": {
+      "mode": "B",
+      "gates": [
+       "signature",
+       "epoch",
+       "nonce",
+       "scope",
+       "proof"
+      ],
+      "note": "mode B rejects a bad signature, a stale epoch, a reused or out-of-order nonce, and an out-of-scope request"
+     },
+     "algo": "Gateway",
+     "highlight": false
+    },
+    {
+     "step": 3,
+     "type": "decision",
+     "title": "Authorization proof verified",
+     "detail": "",
+     "data": {
+      "verdict": "VALID",
+      "label": "Groth16 BN254 \u2014 classical, single-party DEV setup",
+      "verification_ms": 237.1085
+     },
+     "algo": "ZK",
+     "highlight": true
+    },
+    {
+     "step": 4,
+     "type": "decision",
+     "title": "All gates passed \u2014 searching",
+     "detail": "",
+     "data": {
+      "verdict": "ACCEPTED",
+      "mode": "B",
+      "nonce": 1,
+      "epoch": 1,
+      "commitment": "daa10e3d73bd249d"
+     },
+     "algo": "Gateway",
+     "highlight": true
+    },
+    {
+     "step": 5,
+     "type": "result",
+     "title": "1 record(s) matched",
+     "detail": "",
+     "data": {
+      "record_ids": [
+       "rec-cxr"
+      ],
+      "keyword_len": 9
+     },
+     "algo": "SearchNode",
+     "highlight": true
+    }
+   ],
+   "pending": ""
+  },
+  {
+   "index": 8,
+   "title": "A modified record fails closed, and the honest control recovers",
+   "ok": true,
+   "result": {
+    "tampered": {
+     "ok": false,
+     "reason": "content_hash_mismatch",
+     "record_id": "rec-cxr",
+     "plaintext": null,
+     "served_hash": "c36861e9f22cc90cfeb55c1333c1aff3",
+     "committed_hash": "469aba8e05ef1ae67428ca0d92e65447"
+    },
+    "honest_control_ok": true
+   },
+   "trace": [
+    {
+     "step": 1,
+     "type": "decision",
+     "title": "Authorise retrieval of rec-cxr for doctor_b",
+     "detail": "",
+     "data": {
+      "verdict": "AUTHORISED",
+      "reason": "authorized",
+      "epoch": 1
+     },
+     "algo": "Gateway",
+     "highlight": true
+    },
+    {
+     "step": 2,
+     "type": "compute",
+     "title": "Private retrieval via LWE PIR",
+     "detail": "Storage sees encrypted query and sizes, not row index. Search node still sees matching IDs; collusion defeats privacy.",
+     "data": {
+      "hint_bytes": 16777224,
+      "query_bytes": 12,
+      "answer_bytes": 16384,
+      "server_ms": 0.021,
+      "db_rows": 3,
+      "params": {
+       "n": 1024,
+       "q": "2^32",
+       "p": 256,
+       "sigma": 6.4,
+       "db_rows": 3,
+       "slot_size": 4096
+      }
+     },
+     "algo": "PIR",
+     "highlight": false
+    },
+    {
+     "step": 3,
+     "type": "decision",
+     "title": "Retrieval refused: content_hash_mismatch",
+     "detail": "No plaintext is produced when any check fails.",
+     "data": {
+      "verdict": "FAIL_CLOSED",
+      "reason": "content_hash_mismatch",
+      "doctor": "doctor_b",
+      "record_id": "rec-cxr",
+      "served_hash": "c36861e9f22cc90cfeb55c1333c1aff3",
+      "committed_hash": "469aba8e05ef1ae67428ca0d92e65447"
+     },
+     "algo": "BlobStore",
+     "highlight": true
+    }
+   ],
+   "pending": ""
+  },
+  {
+   "index": 9,
+   "title": "Advance epochs in the lattice key tree",
+   "ok": true,
+   "result": {
+    "depth": 4,
+    "nodes": 31,
+    "params": {
+     "n": 2,
+     "q": 257,
+     "sigma": 4,
+     "l": 10
+    },
+    "all_nodes_correct": true,
+    "norms_per_level": [
+     {
+      "level": 0,
+      "count": 1,
+      "min_norm": 2.8284271247461903,
+      "mean_norm": 2.8284271247461903,
+      "max_norm": 2.8284271247461903,
+      "threshold": 10.565137259413596,
+      "usable": true
+     },
+     {
+      "level": 1,
+      "count": 2,
+      "min_norm": 3.3166247903554,
+      "mean_norm": 3.71986520798653,
+      "max_norm": 4.123105625617661,
+      "threshold": 10.565137259413596,
+      "usable": true
+     },
+     {
+      "level": 2,
+      "count": 4,
+      "min_norm": 2.7255405754769875,
+      "mean_norm": 3.0476617171205693,
+      "max_norm": 3.368119178765238,
+      "threshold": 10.565137259413596,
+      "usable": true
+     },
+     {
+      "level": 3,
+      "count": 8,
+      "min_norm": 2.5789132693430483,
+      "mean_norm": 3.210740490177691,
+      "max_norm": 4.234776656841933,
+      "threshold": 10.565137259413596,
+      "usable": true
+     },
+     {
+      "level": 4,
+      "count": 16,
+      "min_norm": 2.8284271247461903,
+      "mean_norm": 3.348316760291547,
+      "max_norm": 3.872983346207417,
+      "threshold": 10.565137259413596,
+      "usable": true
+     }
+    ],
+    "current_epoch": 6,
+    "frontier": [
+     3,
+     22,
+     23
+    ],
+    "past_epoch_refused": true,
+    "peks": {
+     "same_epoch_matches": 16,
+     "cross_epoch_matches": 0,
+     "epochs": 16
+    },
+    "claim": "structure and cost measured; no forward-security claim",
+    "plot": "D:\\College\\Programming\\RIS\\PPSEB\\backend\\results\\figures\\key_tree_norms.png"
+   },
+   "trace": [
+    {
+     "step": 1,
+     "type": "norm",
+     "title": "Node 1 at level 0",
+     "detail": "",
+     "data": {
+      "node_id": 1,
+      "level": 0,
+      "gram_schmidt_norm": 2.8284271247461903,
+      "correct": true
+     },
+     "algo": "KeyTree",
+     "highlight": false
+    },
+    {
+     "step": 2,
+     "type": "norm",
+     "title": "Node 2 at level 1",
+     "detail": "",
+     "data": {
+      "node_id": 2,
+      "level": 1,
+      "gram_schmidt_norm": 4.123105625617661,
+      "correct": true
+     },
+     "algo": "KeyTree",
+     "highlight": false
+    },
+    {
+     "step": 3,
+     "type": "norm",
+     "title": "Node 3 at level 1",
+     "detail": "",
+     "data": {
+      "node_id": 3,
+      "level": 1,
+      "gram_schmidt_norm": 3.3166247903554,
+      "correct": true
+     },
+     "algo": "KeyTree",
+     "highlight": false
+    },
+    {
+     "step": 4,
+     "type": "norm",
+     "title": "Node 4 at level 2",
+     "detail": "",
+     "data": {
+      "node_id": 4,
+      "level": 2,
+      "gram_schmidt_norm": 2.7255405754769875,
+      "correct": true
+     },
+     "algo": "KeyTree",
+     "highlight": false
+    },
+    {
+     "step": 5,
+     "type": "norm",
+     "title": "Node 5 at level 2",
+     "detail": "",
+     "data": {
+      "node_id": 5,
+      "level": 2,
+      "gram_schmidt_norm": 3.368119178765238,
+      "correct": true
+     },
+     "algo": "KeyTree",
+     "highlight": false
+    },
+    {
+     "step": 6,
+     "type": "norm",
+     "title": "Node 6 at level 2",
+     "detail": "",
+     "data": {
+      "node_id": 6,
+      "level": 2,
+      "gram_schmidt_norm": 3.0638369366194325,
+      "correct": true
+     },
+     "algo": "KeyTree",
+     "highlight": false
+    },
+    {
+     "step": 7,
+     "type": "norm",
+     "title": "Node 7 at level 2",
+     "detail": "",
+     "data": {
+      "node_id": 7,
+      "level": 2,
+      "gram_schmidt_norm": 3.03315017762062,
+      "correct": true
+     },
+     "algo": "KeyTree",
+     "highlight": false
+    },
+    {
+     "step": 8,
+     "type": "norm",
+     "title": "Node 8 at level 3",
+     "detail": "",
+     "data": {
+      "node_id": 8,
+      "level": 3,
+      "gram_schmidt_norm": 3.395258131243894,
+      "correct": true
+     },
+     "algo": "KeyTree",
+     "highlight": false
+    },
+    {
+     "step": 9,
+     "type": "norm",
+     "title": "Node 9 at level 3",
+     "detail": "",
+     "data": {
+      "node_id": 9,
+      "level": 3,
+      "gram_schmidt_norm": 4.234776656841933,
+      "correct": true
+     },
+     "algo": "KeyTree",
+     "highlight": false
+    },
+    {
+     "step": 10,
+     "type": "norm",
+     "title": "Node 10 at level 3",
+     "detail": "",
+     "data": {
+      "node_id": 10,
+      "level": 3,
+      "gram_schmidt_norm": 3.4641016151377544,
+      "correct": true
+     },
+     "algo": "KeyTree",
+     "highlight": false
+    },
+    {
+     "step": 11,
+     "type": "norm",
+     "title": "Node 11 at level 3",
+     "detail": "",
+     "data": {
+      "node_id": 11,
+      "level": 3,
+      "gram_schmidt_norm": 2.9154759474226504,
+      "correct": true
+     },
+     "algo": "KeyTree",
+     "highlight": false
+    },
+    {
+     "step": 12,
+     "type": "norm",
+     "title": "Node 12 at level 3",
+     "detail": "",
+     "data": {
+      "node_id": 12,
+      "level": 3,
+      "gram_schmidt_norm": 2.8284271247461903,
+      "correct": true
+     },
+     "algo": "KeyTree",
+     "highlight": false
+    },
+    {
+     "step": 13,
+     "type": "norm",
+     "title": "Node 13 at level 3",
+     "detail": "",
+     "data": {
+      "node_id": 13,
+      "level": 3,
+      "gram_schmidt_norm": 2.5789132693430483,
+      "correct": true
+     },
+     "algo": "KeyTree",
+     "highlight": false
+    },
+    {
+     "step": 14,
+     "type": "norm",
+     "title": "Node 14 at level 3",
+     "detail": "",
+     "data": {
+      "node_id": 14,
+      "level": 3,
+      "gram_schmidt_norm": 3.4065028689320984,
+      "correct": true
+     },
+     "algo": "KeyTree",
+     "highlight": false
+    },
+    {
+     "step": 15,
+     "type": "norm",
+     "title": "Node 15 at level 3",
+     "detail": "",
+     "data": {
+      "node_id": 15,
+      "level": 3,
+      "gram_schmidt_norm": 2.8624683077539563,
+      "correct": true
+     },
+     "algo": "KeyTree",
+     "highlight": false
+    },
+    {
+     "step": 16,
+     "type": "norm",
+     "title": "Node 16 at level 4",
+     "detail": "",
+     "data": {
+      "node_id": 16,
+      "level": 4,
+      "gram_schmidt_norm": 3.872983346207417,
+      "correct": true
+     },
+     "algo": "KeyTree",
+     "highlight": false
+    },
+    {
+     "step": 17,
+     "type": "norm",
+     "title": "Node 17 at level 4",
+     "detail": "",
+     "data": {
+      "node_id": 17,
+      "level": 4,
+      "gram_schmidt_norm": 3.0597169320510935,
+      "correct": true
+     },
+     "algo": "KeyTree",
+     "highlight": false
+    },
+    {
+     "step": 18,
+     "type": "norm",
+     "title": "Node 18 at level 4",
+     "detail": "",
+     "data": {
+      "node_id": 18,
+      "level": 4,
+      "gram_schmidt_norm": 3.0983866769659336,
+      "correct": true
+     },
+     "algo": "KeyTree",
+     "highlight": false
+    },
+    {
+     "step": 19,
+     "type": "norm",
+     "title": "Node 19 at level 4",
+     "detail": "",
+     "data": {
+      "node_id": 19,
+      "level": 4,
+      "gram_schmidt_norm": 3.730504880933232,
+      "correct": true
+     },
+     "algo": "KeyTree",
+     "highlight": false
+    },
+    {
+     "step": 20,
+     "type": "norm",
+     "title": "Node 20 at level 4",
+     "detail": "",
+     "data": {
+      "node_id": 20,
+      "level": 4,
+      "gram_schmidt_norm": 3.8340011703967978,
+      "correct": true
+     },
+     "algo": "KeyTree",
+     "highlight": false
+    },
+    {
+     "step": 21,
+     "type": "norm",
+     "title": "Node 21 at level 4",
+     "detail": "",
+     "data": {
+      "node_id": 21,
+      "level": 4,
+      "gram_schmidt_norm": 3.082207001484488,
+      "correct": true
+     },
+     "algo": "KeyTree",
+     "highlight": false
+    },
+    {
+     "step": 22,
+     "type": "norm",
+     "title": "Node 22 at level 4",
+     "detail": "",
+     "data": {
+      "node_id": 22,
+      "level": 4,
+      "gram_schmidt_norm": 3.605551275463989,
+      "correct": true
+     },
+     "algo": "KeyTree",
+     "highlight": false
+    },
+    {
+     "step": 23,
+     "type": "norm",
+     "title": "Node 23 at level 4",
+     "detail": "",
+     "data": {
+      "node_id": 23,
+      "level": 4,
+      "gram_schmidt_norm": 3.7416573867739413,
+      "correct": true
+     },
+     "algo": "KeyTree",
+     "highlight": false
+    },
+    {
+     "step": 24,
+     "type": "norm",
+     "title": "Node 24 at level 4",
+     "detail": "",
+     "data": {
+      "node_id": 24,
+      "level": 4,
+      "gram_schmidt_norm": 3.082207001484488,
+      "correct": true
+     },
+     "algo": "KeyTree",
+     "highlight": false
+    },
+    {
+     "step": 25,
+     "type": "norm",
+     "title": "Node 25 at level 4",
+     "detail": "",
+     "data": {
+      "node_id": 25,
+      "level": 4,
+      "gram_schmidt_norm": 2.8284271247461903,
+      "correct": true
+     },
+     "algo": "KeyTree",
+     "highlight": false
+    },
+    {
+     "step": 26,
+     "type": "norm",
+     "title": "Node 26 at level 4",
+     "detail": "",
+     "data": {
+      "node_id": 26,
+      "level": 4,
+      "gram_schmidt_norm": 3.856812155135378,
+      "correct": true
+     },
+     "algo": "KeyTree",
+     "highlight": false
+    },
+    {
+     "step": 27,
+     "type": "norm",
+     "title": "Node 27 at level 4",
+     "detail": "",
+     "data": {
+      "node_id": 27,
+      "level": 4,
+      "gram_schmidt_norm": 3.1250660370381067,
+      "correct": true
+     },
+     "algo": "KeyTree",
+     "highlight": false
+    },
+    {
+     "step": 28,
+     "type": "norm",
+     "title": "Node 28 at level 4",
+     "detail": "",
+     "data": {
+      "node_id": 28,
+      "level": 4,
+      "gram_schmidt_norm": 3.2145502536643185,
+      "correct": true
+     },
+     "algo": "KeyTree",
+     "highlight": false
+    },
+    {
+     "step": 29,
+     "type": "norm",
+     "title": "Node 29 at level 4",
+     "detail": "",
+     "data": {
+      "node_id": 29,
+      "level": 4,
+      "gram_schmidt_norm": 3.1622776601683795,
+      "correct": true
+     },
+     "algo": "KeyTree",
+     "highlight": false
+    },
+    {
+     "step": 30,
+     "type": "norm",
+     "title": "Node 30 at level 4",
+     "detail": "",
+     "data": {
+      "node_id": 30,
+      "level": 4,
+      "gram_schmidt_norm": 3.278719262151,
+      "correct": true
+     },
+     "algo": "KeyTree",
+     "highlight": false
+    },
+    {
+     "step": 31,
+     "type": "norm",
+     "title": "Node 31 at level 4",
+     "detail": "",
+     "data": {
+      "node_id": 31,
+      "level": 4,
+      "gram_schmidt_norm": 3.0,
+      "correct": true
+     },
+     "algo": "KeyTree",
+     "highlight": false
+    },
+    {
+     "step": 32,
+     "type": "note",
+     "title": "Frontier advanced; non-frontier owned secret arrays erased",
+     "detail": "",
+     "data": {
+      "epoch": 6,
+      "frontier": [
+       3,
+       22,
+       23
+      ],
+      "retained_secret_count": 3
+     },
+     "algo": "KeyTree",
+     "highlight": false
+    }
+   ],
+   "pending": ""
+  }
+ ],
+ "all_passed": true,
+ "passed": 9,
+ "graded": 9,
+ "pending": [],
+ "elapsed_s": 18.47,
+ "within_ten_minutes": true,
+ "seed": 42,
+ "mode": "B",
+ "kem_label": "pure-python-ml-kem-768-NON-HARDENED",
+ "ledger_backend": "memory-ledger",
+ "proof_mode": "Groth16 BN254 \u2014 classical, single-party DEV setup",
+ "saved_by": "medvault.demo"
+}

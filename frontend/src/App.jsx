@@ -16,9 +16,22 @@ import LedgerTab from "./tabs/LedgerTab";
 import ProofTab from "./tabs/ProofTab";
 import SecurityTab from "./tabs/SecurityTab";
 
+import MedvaultDemoTab from "./tabs/medvault/DemoTab";
+import PatientTab from "./tabs/medvault/PatientTab";
+import DoctorTab from "./tabs/medvault/DoctorTab";
+import AuditorTab from "./tabs/medvault/AuditorTab";
+import EvidenceTab from "./tabs/medvault/EvidenceTab";
+
 /* Grouped so the nav reads as a story rather than ten equal buttons:
-   how it works -> what is broken -> how far it goes. */
+   how it works -> what is broken -> how far it goes -> the system built on it. */
 const GROUPS = [
+  { name: "MedVault", tabs: [
+    { id: "mv-demo", label: "Demo" },
+    { id: "mv-patient", label: "Patient" },
+    { id: "mv-doctor", label: "Doctor" },
+    { id: "mv-auditor", label: "Auditor" },
+    { id: "mv-evidence", label: "Evidence" },
+  ] },
   { name: "Scheme", tabs: [
     { id: "overview", label: "Overview" },
     { id: "happy", label: "Happy Path" },
@@ -51,7 +64,7 @@ export default function App() {
   // back button works.
   const [tab, setTab] = useState(() => {
     const h = window.location.hash.replace("#", "");
-    return ALL.some((t) => t.id === h) ? h : "overview";
+    return ALL.some((t) => t.id === h) ? h : "mv-demo";
   });
   useEffect(() => {
     const onHash = () => {
@@ -134,6 +147,11 @@ export default function App() {
       <main className="flex-1 min-h-0 overflow-y-auto">
         <div className="mx-auto w-full max-w-[1400px] px-6 py-6">
           {tab === "overview" && <OverviewTab goTo={go} />}
+          {tab === "mv-demo" && <MedvaultDemoTab />}
+          {tab === "mv-patient" && <PatientTab />}
+          {tab === "mv-doctor" && <DoctorTab />}
+          {tab === "mv-auditor" && <AuditorTab />}
+          {tab === "mv-evidence" && <EvidenceTab />}
           {tab === "happy" && <HappyPathTab {...tabProps} />}
           {tab === "security" && <SecurityTab {...tabProps} />}
           {tab === "kga" && <KgaTab {...tabProps} />}

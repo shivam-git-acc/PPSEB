@@ -1,0 +1,356 @@
+{
+  "meta": {
+    "generated_by": "medvault.repro",
+    "seed": 42,
+    "library_versions": {
+      "python": "3.13.14",
+      "numpy": "2.2.6",
+      "cryptography": "46.0.3",
+      "hypothesis": "6.151.9"
+    },
+    "kem_label": "pure-python-ml-kem-768-NON-HARDENED",
+    "ledger_backend": "memory-ledger",
+    "lattice_params": {
+      "n": 4,
+      "q": 257,
+      "sigma": 4.0,
+      "l": 10
+    },
+    "archived_sweeps_excluded": [
+      "sweep",
+      "boundary",
+      "nq_sweep",
+      "end_to_end",
+      "forward_sec",
+      "recovery"
+    ],
+    "elapsed_s": 41.07
+  },
+  "kga_success": {
+    "mode_A": {
+      "outsider": 100.0,
+      "keyless_server": 100.0,
+      "insider": 100.0
+    },
+    "mode_B": {
+      "outsider": 0.0,
+      "keyless_server": 0.0,
+      "insider": 100.0
+    }
+  },
+  "replay_plant": {
+    "mode_A": {
+      "replay": true,
+      "plant": true,
+      "replay_reason": "accepted",
+      "plant_reason": "accepted"
+    },
+    "mode_B": {
+      "replay": false,
+      "plant": false,
+      "replay_reason": "reused_nonce",
+      "plant_reason": "unsigned_entry"
+    }
+  },
+  "access_pattern": {
+    "mode_A": {
+      "token_on_chain": true,
+      "log_entries": 8
+    },
+    "mode_B": {
+      "token_on_chain": false,
+      "log_entries": 8
+    }
+  },
+  "search_latency_ms": [
+    {
+      "records": 25,
+      "doctors": 1,
+      "mode": "B",
+      "queries": 10,
+      "plaintext_index_ms_per_query": 0.0004,
+      "keyed_index_ms_per_query": 0.3728,
+      "keyed_index_total_ms": 3.728,
+      "index_entries": 50
+    },
+    {
+      "records": 25,
+      "doctors": 3,
+      "mode": "B",
+      "queries": 10,
+      "plaintext_index_ms_per_query": 0.0003,
+      "keyed_index_ms_per_query": 0.3273,
+      "keyed_index_total_ms": 3.273,
+      "index_entries": 150
+    },
+    {
+      "records": 100,
+      "doctors": 3,
+      "mode": "B",
+      "queries": 10,
+      "plaintext_index_ms_per_query": 0.0002,
+      "keyed_index_ms_per_query": 0.3756,
+      "keyed_index_total_ms": 3.756,
+      "index_entries": 600
+    },
+    {
+      "records": 10,
+      "doctors": 1,
+      "mode": "A",
+      "queries": 5,
+      "ppseb_toy_ms_per_query": 880.345,
+      "index_entries": 10,
+      "params": {
+        "n": 4,
+        "q": 257,
+        "sigma": 4.0,
+        "l": 10
+      }
+    }
+  ],
+  "storage_overhead": {
+    "record_plaintext_bytes": 256,
+    "record_ciphertext_bytes": 284,
+    "record_overhead_bytes": 28,
+    "envelope_bytes": 1427,
+    "envelope_kem_ciphertext_bytes": 1088,
+    "envelope_sealed_payload_bytes": 339,
+    "index_entry_bytes": 96,
+    "index_entry_token_bytes": 32,
+    "index_entry_signature_bytes": 64,
+    "note": "index entry = 32-byte HMAC token + 64-byte Ed25519 signature; the PEKS entry in mode A stores a full ciphertext instead",
+    "kem": {
+      "label": "pure-python-ml-kem-768-NON-HARDENED",
+      "public_key_bytes": 1184,
+      "secret_key_bytes": 2400,
+      "ciphertext_bytes": 1088,
+      "shared_secret_bytes": 32
+    }
+  },
+  "revocation_cost": {
+    "time_ms": 18.98,
+    "transactions": 1,
+    "re_key_ops": 2,
+    "re_wrap_ops": 2,
+    "re_index_ops": 80,
+    "dropped_entries": 40,
+    "epoch": 1,
+    "records_in_scope": 20,
+    "doctors_before": 3,
+    "doctors_after": 2
+  },
+  "pir": [
+    {
+      "db_size": 16,
+      "hint_bytes": 2097160,
+      "query_bytes": 64,
+      "answer_bytes": 2048,
+      "server_time_ms": 0.016,
+      "setup_time_ms": 7.476,
+      "client_time_ms": 0.948,
+      "params": {
+        "n": 1024,
+        "q": "2^32",
+        "p": 256,
+        "sigma": 6.4,
+        "db_rows": 16,
+        "slot_size": 512
+      }
+    },
+    {
+      "db_size": 256,
+      "hint_bytes": 2097160,
+      "query_bytes": 1024,
+      "answer_bytes": 2048,
+      "server_time_ms": 0.178,
+      "setup_time_ms": 270.251,
+      "client_time_ms": 0.759,
+      "params": {
+        "n": 1024,
+        "q": "2^32",
+        "p": 256,
+        "sigma": 6.4,
+        "db_rows": 256,
+        "slot_size": 512
+      }
+    },
+    {
+      "db_size": 1024,
+      "hint_bytes": 2097160,
+      "query_bytes": 4096,
+      "answer_bytes": 2048,
+      "server_time_ms": 1.177,
+      "setup_time_ms": 2480.93,
+      "client_time_ms": 1.325,
+      "params": {
+        "n": 1024,
+        "q": "2^32",
+        "p": 256,
+        "sigma": 6.4,
+        "db_rows": 1024,
+        "slot_size": 512
+      }
+    }
+  ],
+  "zk": {
+    "available": true,
+    "system": "Groth16 over BN254 (classical)",
+    "trusted_setup": "single-party local dev ceremony; unaudited; not suitable for real use",
+    "constraints": 3202,
+    "depth": 4,
+    "zkey_bytes": 1422887,
+    "proof_bytes": 741,
+    "public_inputs": [
+      "root",
+      "nullifier",
+      "scope_id",
+      "epoch_tag"
+    ],
+    "prove_and_search_ms": 4006.2,
+    "verify_ms": 292.69,
+    "verified": true,
+    "nullifiers_consumed": 1
+  },
+  "tree_evolution_norm": {
+    "depth": 4,
+    "nodes": 31,
+    "params": {
+      "n": 2,
+      "q": 257,
+      "sigma": 4,
+      "l": 10
+    },
+    "all_nodes_correct": true,
+    "norms_per_level": [
+      {
+        "level": 0,
+        "count": 1,
+        "min_norm": 2.8284271247461903,
+        "mean_norm": 2.8284271247461903,
+        "max_norm": 2.8284271247461903,
+        "threshold": 10.565137259413596,
+        "usable": true
+      },
+      {
+        "level": 1,
+        "count": 2,
+        "min_norm": 3.3166247903554,
+        "mean_norm": 3.71986520798653,
+        "max_norm": 4.123105625617661,
+        "threshold": 10.565137259413596,
+        "usable": true
+      },
+      {
+        "level": 2,
+        "count": 4,
+        "min_norm": 2.7255405754769875,
+        "mean_norm": 3.0476617171205693,
+        "max_norm": 3.368119178765238,
+        "threshold": 10.565137259413596,
+        "usable": true
+      },
+      {
+        "level": 3,
+        "count": 8,
+        "min_norm": 2.5789132693430483,
+        "mean_norm": 3.210740490177691,
+        "max_norm": 4.234776656841933,
+        "threshold": 10.565137259413596,
+        "usable": true
+      },
+      {
+        "level": 4,
+        "count": 16,
+        "min_norm": 2.8284271247461903,
+        "mean_norm": 3.348316760291547,
+        "max_norm": 3.872983346207417,
+        "threshold": 10.565137259413596,
+        "usable": true
+      }
+    ],
+    "max_norm_within_threshold": true,
+    "peks_same_epoch_matches": 16,
+    "peks_cross_epoch_matches": 0,
+    "peks_epochs": 16,
+    "claim": "structure implemented and measured; no forward-security claim"
+  },
+  "gas_per_consent_event": {
+    "available": true,
+    "backend": "hardhat-local-chain",
+    "chain_id": 31337,
+    "proof_enforced_on_chain": true,
+    "gas": {
+      "deploy_Groth16Verifier": {
+        "calls": 1,
+        "mean": 405780,
+        "max": 405780
+      },
+      "deploy_ZKVerifier": {
+        "calls": 1,
+        "mean": 163865,
+        "max": 163865
+      },
+      "deploy_ConsentRegistry": {
+        "calls": 1,
+        "mean": 1223297,
+        "max": 1223297
+      },
+      "register_doctor": {
+        "calls": 3,
+        "mean": 90905,
+        "max": 90909
+      },
+      "put_record": {
+        "calls": 1,
+        "mean": 68283,
+        "max": 68283
+      },
+      "grant": {
+        "calls": 1,
+        "mean": 75244,
+        "max": 75244
+      },
+      "consent_root": {
+        "calls": 2,
+        "mean": 36746,
+        "max": 45296
+      },
+      "search_with_proof": {
+        "calls": 1,
+        "mean": 302010,
+        "max": 302010
+      },
+      "revoke": {
+        "calls": 1,
+        "mean": 53265,
+        "max": 53265
+      }
+    },
+    "event_names": [
+      "AuthVerified",
+      "ConsentRootChanged",
+      "DoctorRegistered",
+      "EpochChanged",
+      "Granted",
+      "RecordCommitted",
+      "Revoked",
+      "SearchCommitted"
+    ]
+  },
+  "not_yet_measured": {},
+  "claims": {
+    "can_say": [
+      "each finding has a named fix and a regression test",
+      "cost and leakage are measured",
+      "key wrapping and PIR use lattice assumptions"
+    ],
+    "do_not_say": [
+      "post-quantum system",
+      "PPSEB is Module-LWE",
+      "forward security proven",
+      "revocation recalls downloaded data",
+      "LWE is broken",
+      "production-ready"
+    ]
+  }
+}

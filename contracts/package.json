@@ -1,0 +1,17 @@
+{
+  "name": "medvault-contracts",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "compile": "node prepare.js && hardhat compile",
+    "node": "hardhat node --hostname 127.0.0.1",
+    "deploy": "hardhat run scripts/deploy.js --network localhost",
+    "test": "node prepare.js && hardhat test"
+  },
+  "devDependencies": {
+    "hardhat": "2.28.0",
+    "@nomicfoundation/hardhat-ethers": "3.1.2",
+    "ethers": "6.15.0",
+    "solc": "0.8.28"
+  }
+}
