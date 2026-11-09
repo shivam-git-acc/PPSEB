@@ -63,7 +63,7 @@ def _envelope(result: dict, trace, world: DemoWorld) -> dict:
 
 class SessionRequest(BaseModel):
     seed: int = 42
-    mode: Literal["A", "B"] = "B"
+    mode: Literal["A", "B", "C"] = "B"
     zk_mode: Literal["auto", "groth16", "signed"] = "auto"
     ledger_mode: Literal["memory", "hardhat"] = "memory"
 
@@ -114,7 +114,8 @@ class EvilModeRequest(BaseModel):
 
 class AttackRequest(BaseModel):
     kind: Literal["kga", "plant", "replay", "retrieval_replay", "access_pattern", "all"] = "all"
-    mode: Literal["A", "B", "both"] = "both"
+    #: "both" is the A/B before-after the demo uses; "all" adds mode C.
+    mode: Literal["A", "B", "C", "both", "all"] = "both"
     attacker: Literal["outsider", "keyless_server", "insider"] = "outsider"
 
 
@@ -308,7 +309,7 @@ def _collect_traces(payload) -> list[dict]:
 @router.post("/attack/run")
 def attack_run(req: AttackRequest):
     world = _world()
-    modes = ("A", "B") if req.mode == "both" else (req.mode,)
+    modes = {"both": ("A", "B"), "all": ("A", "B", "C")}.get(req.mode, (req.mode,))
 
     if req.kind == "kga":
         result = {mode: run_kga(mode, attacker=req.attacker) for mode in modes}
@@ -323,7 +324,7 @@ def attack_run(req: AttackRequest):
     else:
         from .harness import run_all_attacks
 
-        result = run_all_attacks(world.config)
+        result = run_all_attacks(world.config, modes=modes)
     return _envelope({"kind": req.kind, "attackers": list(ATTACKER_MODELS),
                       "results": result}, _collect_traces(result), world)
 

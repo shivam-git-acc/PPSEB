@@ -27,7 +27,7 @@ PINNED_VERSIONS = {
 }
 
 #: Index modes, in the order they are shown in the UI.
-INDEX_MODES = ("A", "B")
+INDEX_MODES = ("A", "B", "C")
 
 #: Default record-set slot size for the PIR database (design decision D4).
 DEFAULT_SLOT_SIZE = 4096

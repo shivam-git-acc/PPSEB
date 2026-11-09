@@ -41,6 +41,9 @@ from .search import (
 GATE_POLICY = {
     "A": (),
     "B": ("signature", "epoch", "nonce", "scope"),
+    # Mode C repairs keyword guessing only. It keeps PPSEB's open, public search
+    # path on purpose, so replay and planting are measured, not hidden.
+    "C": (),
 }
 
 REJECTION_REASONS = (
@@ -69,7 +72,7 @@ class Gateway:
                  patient_id: str = "patient", zk_verifier=None,
                  patient_key=None) -> None:
         if mode not in GATE_POLICY:
-            raise ValueError(f"gateway mode must be 'A' or 'B', got {mode!r}")
+            raise ValueError(f"gateway mode must be one of {tuple(GATE_POLICY)}, got {mode!r}")
         self.ledger = ledger
         self.search_node = search_node
         self.index = index
@@ -86,11 +89,14 @@ class Gateway:
             "mode": self.mode,
             "gates": list(GATE_POLICY[self.mode]) +
                      (["proof"] if self.zk_verifier is not None and self.mode == "B" else []),
-            "note": ("mode A is the baseline: no requester authentication, so a "
-                     "captured token is replayable by construction"
-                     if self.mode == "A" else
-                     "mode B rejects a bad signature, a stale epoch, a reused or "
-                     "out-of-order nonce, and an out-of-scope request"),
+            "note": {
+                "A": "mode A is the baseline: no requester authentication, so a "
+                     "captured token is replayable by construction",
+                "B": "mode B rejects a bad signature, a stale epoch, a reused or "
+                     "out-of-order nonce, and an out-of-scope request",
+                "C": "mode C fixes keyword guessing only: the trapdoor is public and "
+                     "Verify is public, but requests are not authenticated",
+            }[self.mode],
         }
 
     def last_nonce(self, doctor_id: str) -> int:
@@ -156,7 +162,8 @@ class Gateway:
         else:
             self.ledger.request_search(
                 self.patient_id, req.doctor_id, commitment, req.nonce,
-                public_token=req.token if self.mode == "A" else None,
+                # A and C keep PPSEB's public, on-chain trapdoor.
+                public_token=req.token if self.mode in ("A", "C") else None,
             )
             if nullifier is not None:
                 self.ledger.add_nullifier(nullifier)

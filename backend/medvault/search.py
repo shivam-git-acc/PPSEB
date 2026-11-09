@@ -15,6 +15,14 @@ mode A  token = a PEKS trapdoor. The index holds PEKS ciphertexts. `search`
 mode B  token = HMAC-SHA-256(K_(doctor, epoch), normalise(keyword)). `search`
         is a byte comparison. Without K the token cannot be recomputed for a
         guess, so the offline dictionary attack has nothing to test against.
+mode C  PAEKS-style keyword authentication over PPSEB. The keyword is first
+        replaced by w' = HMAC-SHA-256(K_pd, normalise(keyword)), where K_pd is
+        the per-doctor per-epoch key the patient already delivers inside the
+        ML-KEM envelope; then PPSEB's own, unchanged peks_encrypt / trapdoor /
+        verify run on w'. Verify stays public and the trapdoor can stay on the
+        chain, but a guess cannot be encrypted without K_pd. This follows the
+        idea of Huang-Li PAEKS (the paper's ref. 4, the deck's proposed fix);
+        it is not that pairing-based construction and carries no proof.
 
 Everything else in here — normalisation, commitments, entry signing, nonce
 tracking — is mode-independent and is what turns the keyed token into a usable
@@ -350,6 +358,46 @@ class ModeAIndex(SearchIndex):
         return IndexEntry(sha256(payload), "PLANTED", epoch, doctor_id, b"", payload)
 
 
+def paeks_keyword(key: bytes, keyword: str) -> str:
+    """Mode C's keyword transform: the string PPSEB actually encrypts.
+
+    HMAC-SHA-256 under the shared patient-doctor key, so building a test
+    ciphertext for a guess needs the key, while Verify itself stays public.
+    """
+    return "paeks:" + compute_token(key, keyword).hex()
+
+
+class ModeCIndex(ModeAIndex):
+    """PAEKS-style mode: PPSEB on authenticated keywords (deck finding 3's fix).
+
+    The PPSEB period `self.epoch` is fixed; MedVault epochs are carried by the
+    key, because K_pd is per doctor *and* per epoch, so a revoked doctor's key
+    builds trapdoors that match nothing in the new epoch's index.
+    """
+
+    def mode_name(self) -> str:
+        return "C"
+
+    def build(self, pairs, *, index_key, epoch, doctor_id, signing_key=None) -> list[IndexEntry]:
+        if not index_key:
+            raise ValueError("mode C index entries need the shared patient-doctor key")
+        self._require_keys()
+        entries = []
+        for record_id, keyword in pairs:
+            rng, pyrng = self._rngs()
+            ct = peks_encrypt(self.pk, paeks_keyword(index_key, keyword), self.epoch,
+                              self.mu, self.params, rng, pyrng)
+            payload = pack_array(ct["CT1"]) + pack_array(ct["CT2"])
+            entries.append(IndexEntry(sha256(payload), record_id, epoch, doctor_id,
+                                      b"", payload))
+        return entries
+
+    def compute_token(self, index_key, keyword: str) -> bytes:
+        if not index_key:
+            raise ValueError("mode C trapdoors need the shared patient-doctor key")
+        return super().compute_token(None, paeks_keyword(index_key, keyword))
+
+
 # --------------------------------------------------------------------------
 # Search node
 # --------------------------------------------------------------------------
@@ -494,9 +542,7 @@ def build_mode(mode: str, trace: Trace | None = None, **kwargs) -> SearchIndex:
     elif mode == "B":
         index = ModeBIndex()
     elif mode == "C":
-        raise NotImplementedError(
-            "mode C (PAEKS) is P1 per design decision D3 and is not built yet"
-        )
+        index = ModeCIndex(**kwargs)
     else:
         raise ValueError(f"unknown index mode {mode!r}")
     if trace is not None:
@@ -507,8 +553,10 @@ def build_mode(mode: str, trace: Trace | None = None, **kwargs) -> SearchIndex:
                      "can be tested against it, so offline keyword guessing works",
                 "B": "keyed HMAC: without the per-doctor per-epoch key a guess cannot "
                      "even be turned into a token",
+                "C": "PAEKS-style: PPSEB with a public Verify, on keywords authenticated "
+                     "under the shared patient-doctor key",
             }.get(mode, ""),
-            data={"mode": mode, "allowed_compare": "mode A vs mode B"},
+            data={"mode": mode, "allowed_compare": "modes A, B and C"},
             algo="SearchIndex",
             highlight=True,
         )

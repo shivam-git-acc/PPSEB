@@ -127,6 +127,34 @@ export default function EvidenceTab() {
           </p>
         </Card>
 
+        <div className="lg:col-span-2">
+        <Card title="Mode trade-off" subtitle="The deck's slide 44, measured: what each fix costs in speed or openness.">
+          <Table
+            columns={[
+              { key: "mode", label: "Mode" },
+              { key: "what_it_is", label: "What it is", mono: false },
+              { key: "public_verify", label: "Public Verify" },
+              { key: "trapdoor_or_token_on_chain", label: "Trapdoor on chain" },
+              { key: "kga_outsider", label: "KGA outsider" },
+              { key: "kga_keyless_server", label: "KGA keyless" },
+              { key: "kga_insider", label: "KGA insider" },
+              { key: "search_replay_succeeds", label: "Replay" },
+              { key: "plant_succeeds", label: "Plant" },
+              { key: "search_ms_per_query", label: "ms / search" },
+              { key: "index_entry_bytes", label: "Bytes / entry" },
+            ]}
+            rows={tables?.mode_tradeoff}
+          />
+          <p className="text-2xs text-ink-500 mt-3 leading-relaxed">
+            KGA cells are successes over trials (every dictionary keyword × 2 seeds in the committed
+            run; one trial each from this button). Mode C keeps PPSEB's public Verify and on-chain
+            trapdoor yet keyless guessing fails; it authenticates keywords, not requests or
+            ciphertexts, so replay and planting still succeed. Mode A′ changes only the write path
+            and reuses mode A's costs. Toy lattice parameters (n = 4, q = 257).
+          </p>
+        </Card>
+        </div>
+
         <Card title="Storage overhead" subtitle="Bytes, measured on one record of 256 bytes.">
           {storage ? (
             <KeyValues entries={{

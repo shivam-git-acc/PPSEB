@@ -7,7 +7,8 @@ export default defineConfig({
     port: 5173,
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:8000",
+        // MEDVAULT_API lets a second backend (e.g. a test on :8001) sit beside the usual one.
+        target: process.env.MEDVAULT_API || "http://127.0.0.1:8000",
         changeOrigin: true,
       },
     },

@@ -339,8 +339,8 @@ def test_replay_and_plant_differ_by_mode():
 
 def test_mode_selection_and_unknown_modes():
     assert build_mode("B").mode_name() == "B"
-    with pytest.raises(NotImplementedError):
-        build_mode("C")
+    # Mode C was a stub until Phase 6 (S2); it now builds the PAEKS-style index.
+    assert build_mode("C").mode_name() == "C"
     with pytest.raises(ValueError):
         build_mode("Z")
 

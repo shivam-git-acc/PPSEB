@@ -23,7 +23,9 @@ from .service import DemoWorld, build_world
 from .search import (
     IndexEntry,
     ModeAIndex,
+    ModeCIndex,
     compute_token,
+    paeks_keyword,
     search_signing_message,
     unpack_array,
 )
@@ -126,6 +128,46 @@ def run_kga(mode: str, *, attacker: str = "outsider",
             "trace": baseline["trace"],
         }
 
+    if mode == "C":
+        # The same public-key attack as mode A (attacks/kga.py, unchanged): the
+        # trapdoor is public and Verify is public. What changes is what can be
+        # encrypted. Without K_pd the attacker can only encrypt the raw guesses
+        # (or guesses under a key they hold, which is not this doctor's);
+        # the insider holds K_pd and authenticates each guess first.
+        index = world.index
+        assert isinstance(index, ModeCIndex)
+        trap = unpack_array(captured_token, (index.params.m,))
+        insider = attacker == "insider"
+        candidates = ([paeks_keyword(capability.index_key, g) for g in dictionary]
+                      if insider else list(dictionary))
+        result = kga_attack(index.pk, index.mu, index.epoch, trap, candidates,
+                            index.params, seed=seed)
+        found = result["recovered_keyword"]
+        recovered = dictionary[candidates.index(found)] if found is not None else None
+        return {
+            "mode": mode,
+            "attacker": attacker,
+            "success": recovered == secret_keyword,
+            "success_rate_pct": 100.0 if recovered == secret_keyword else 0.0,
+            "wrong_keyword": recovered is not None and recovered != secret_keyword,
+            # Only the key holder encrypts the true keyword the way the index
+            # does, so only their miss is a trapdoor failing on its own keyword.
+            "own_ciphertext_failed": insider and recovered is None,
+            "recovered_keyword": recovered,
+            "guesses_tried": result["guesses_tried"],
+            "dictionary_size": len(dictionary),
+            "blocked": not insider,
+            "method": ("PEKS.Encrypt on HMAC(K_pd, guess) + public Verify"
+                       if insider else
+                       "PEKS.Encrypt on raw guesses + public Verify, as in mode A: "
+                       "without K_pd no guess matches an authenticated keyword"),
+            "evidence": [{"guess": g, "match": recovered == g and found is not None}
+                         for g in dictionary[: result["guesses_tried"]]],
+            "params": {"n": index.params.n, "q": index.params.q,
+                       "sigma": index.params.sigma, "l": index.params.l},
+            "trace": result["trace"],
+        }
+
     # mode B. An attacker without the key cannot turn a guess into a token; the
     # honest way to measure that is to let them try with a key they do have.
     if attacker == "insider":
@@ -176,7 +218,7 @@ def kga_rate(mode: str, attacker: str, *, config: MedVaultConfig | None = None,
     mode B). Trials = len(dictionary) × seeds. The first trial's evidence and
     trace are kept so the UI still has something concrete to show.
     """
-    base = config or MedVaultConfig(index_mode=mode if mode in ("A", "B") else "B")
+    base = config or MedVaultConfig(index_mode=mode if mode in ("A", "B", "C") else "B")
     successes, trials, wrong, broken, first = 0, 0, 0, 0, None
     for k in range(seeds):
         world = build_sandbox(mode, replace(base, seed=base.seed + k))
@@ -225,7 +267,7 @@ def run_kga_unkeyed_control(*, dictionary: tuple[str, ...] = KEYWORD_DICTIONARY)
 
 
 def kga_matrix(config: MedVaultConfig | None = None, *, rates: bool = False,
-               seeds: int = 2) -> dict:
+               seeds: int = 2, modes: tuple[str, ...] = ("A", "B")) -> dict:
     """Every (mode, attacker) pair the evaluation table needs.
 
     `rates=False` (the live demo) runs one trial per cell. `rates=True`
@@ -234,21 +276,32 @@ def kga_matrix(config: MedVaultConfig | None = None, *, rates: bool = False,
     for all three rather than measuring the same attack three times.
     """
     if not rates:
-        return {
-            "mode_A": {attacker: run_kga("A", attacker=attacker, config=config)
-                       for attacker in ATTACKER_MODELS},
-            "mode_B": {attacker: run_kga("B", attacker=attacker, config=config)
-                       for attacker in ATTACKER_MODELS},
+        single = {f"mode_{mode}": {attacker: run_kga(mode, attacker=attacker, config=config)
+                                   for attacker in ATTACKER_MODELS}
+                  for mode in modes}
+        single["control_unkeyed_hash"] = run_kga_unkeyed_control()  # hashing only: cheap
+        return single
+    out: dict = {}
+    if "A" in modes:
+        mode_a = kga_rate("A", "outsider", config=config, seeds=seeds)
+        out["mode_A"] = {attacker: {**mode_a, "attacker": attacker,
+                                    "note": "same measurement for every model: Verify is public"}
+                         for attacker in ATTACKER_MODELS}
+    if "B" in modes:
+        out["mode_B"] = {attacker: kga_rate("B", attacker, config=config, seeds=seeds)
+                         for attacker in ATTACKER_MODELS}
+    if "C" in modes:
+        # Outsider and keyless chain node hold the same material in mode C
+        # (public key, public trapdoor, public Verify, no K_pd): measured once.
+        keyless = kga_rate("C", "outsider", config=config, seeds=seeds)
+        out["mode_C"] = {
+            "outsider": keyless,
+            "keyless_server": {**keyless, "attacker": "keyless_server",
+                               "note": "same material as the outsider: the trapdoor is public"},
+            "insider": kga_rate("C", "insider", config=config, seeds=seeds),
         }
-    mode_a = kga_rate("A", "outsider", config=config, seeds=seeds)
-    return {
-        "mode_A": {attacker: {**mode_a, "attacker": attacker,
-                              "note": "same measurement for every model: Verify is public"}
-                   for attacker in ATTACKER_MODELS},
-        "mode_B": {attacker: kga_rate("B", attacker, config=config, seeds=seeds)
-                   for attacker in ATTACKER_MODELS},
-        "control_unkeyed_hash": run_kga_unkeyed_control(),
-    }
+    out["control_unkeyed_hash"] = run_kga_unkeyed_control()
+    return out
 
 
 # --------------------------------------------------------------------------
@@ -275,7 +328,9 @@ def run_plant(mode: str, *, config: MedVaultConfig | None = None) -> dict:
     world = build_sandbox(mode, config)
     epoch = world.ledger.current_epoch(world.patient_id)
 
-    if mode == "A":
+    # Mode C runs the same Verify as mode A, so the same forgery applies: it
+    # authenticates keywords, not ciphertexts, and has no write-path checks.
+    if mode in ("A", "C"):
         index = world.index
         assert isinstance(index, ModeAIndex)
         entry = index.universal_plant(epoch, "doctor_a")
@@ -409,13 +464,20 @@ def run_access_pattern(mode: str, *, config: MedVaultConfig | None = None) -> di
 # --------------------------------------------------------------------------
 
 def run_all_attacks(config: MedVaultConfig | None = None, *, kga_rates: bool = False,
-                    kga_seeds: int = 2) -> dict:
-    """The before/after table: three attacks, two modes, one code path."""
-    kga = kga_matrix(config, rates=kga_rates, seeds=kga_seeds)
-    replay = {mode: run_replay(mode, config=config) for mode in ("A", "B")}
-    plant = {mode: run_plant(mode, config=config) for mode in ("A", "A′", "B")}
-    access = {mode: run_access_pattern(mode, config=config) for mode in ("A", "B")}
-    retrieval = {mode: run_retrieval_replay(mode, config=config) for mode in ("A", "B")}
+                    kga_seeds: int = 2, modes: tuple[str, ...] = ("A", "B")) -> dict:
+    """The before/after table: every attack, every requested mode, one code path.
+
+    The live demo uses modes A and B (PRD section 11); `repro` and the Auditor's
+    "run all" add mode C. Mode A′ (A plus the shape check) only changes the
+    write path, so it appears in the plant row only.
+    """
+    kga = kga_matrix(config, rates=kga_rates, seeds=kga_seeds, modes=modes)
+    plant_modes = tuple(m for m in ("A", "A′", "B", "C")
+                        if m in modes or (m == "A′" and "A" in modes))
+    replay = {mode: run_replay(mode, config=config) for mode in modes}
+    plant = {mode: run_plant(mode, config=config) for mode in plant_modes}
+    access = {mode: run_access_pattern(mode, config=config) for mode in modes}
+    retrieval = {mode: run_retrieval_replay(mode, config=config) for mode in modes}
     return {
         "kga": kga,
         "replay": replay,
@@ -424,14 +486,14 @@ def run_all_attacks(config: MedVaultConfig | None = None, *, kga_rates: bool = F
         "access_pattern": access,
         "summary": {
             "kga_outsider_pct": {mode: kga[f"mode_{mode}"]["outsider"]["success_rate_pct"]
-                                  for mode in ("A", "B")},
+                                  for mode in modes},
             "kga_insider_pct": {mode: kga[f"mode_{mode}"]["insider"]["success_rate_pct"]
-                                 for mode in ("A", "B")},
-            "replay_succeeds": {mode: replay[mode]["replay_ok"] for mode in ("A", "B")},
+                                 for mode in modes},
+            "replay_succeeds": {mode: replay[mode]["replay_ok"] for mode in modes},
             "retrieval_replay_succeeds": {mode: retrieval[mode]["replay_ok"]
-                                          for mode in ("A", "B")},
+                                          for mode in modes},
             "plant_succeeds": {mode: plant[mode]["appears_in_search"]
-                               for mode in ("A", "A′", "B")},
-            "token_on_chain": {mode: access[mode]["token_on_chain"] for mode in ("A", "B")},
+                               for mode in plant_modes},
+            "token_on_chain": {mode: access[mode]["token_on_chain"] for mode in modes},
         },
     }

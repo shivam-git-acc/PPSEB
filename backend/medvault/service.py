@@ -60,6 +60,7 @@ from .kem import KEMWrapper, get_kem_wrapper
 from .merkle import MerkleProofStep, MerkleTree
 from .search import (
     ModeAIndex,
+    ModeCIndex,
     RetrievalRequest,
     SearchIndex,
     SearchNode,
@@ -252,14 +253,16 @@ class DemoWorld:
 
     def _build_index(self):
         trace = None
-        if self.mode == "A":
+        if self.mode in ("A", "C"):
             # The baseline index owns the PPSEB keys: computing a mode-A token
             # means building a trapdoor, which is what Finding 1 is about.
+            # Mode C runs the same scheme on authenticated keywords.
             rng = np.random.default_rng(self.config.sub_seed("ppseb-initialization"))
             state = initialization(self.params, rng)
-            return ModeAIndex(self.params, pk=state["pk_r0"], sk=state["sk_r0"],
-                              mu=state["mu"], epoch=0,
-                              seed=self.config.sub_seed("ppseb-mode-a"))
+            cls = ModeAIndex if self.mode == "A" else ModeCIndex
+            return cls(self.params, pk=state["pk_r0"], sk=state["sk_r0"],
+                       mu=state["mu"], epoch=0,
+                       seed=self.config.sub_seed(f"ppseb-mode-{self.mode.lower()}"))
         return build_mode(self.mode, trace)
 
     def _resolve_doctor_key(self, doctor_id: str):
@@ -271,7 +274,8 @@ class DemoWorld:
         """Per-doctor per-epoch HMAC key (decision D1).
 
         Mode A has no keyed index, so this returns empty bytes there — the
-        absence *is* the baseline.
+        absence *is* the baseline. In mode C the same key is K_pd, the shared
+        patient-doctor key that authenticates keywords before PPSEB runs.
         """
         if self.mode == "A":
             return b""
@@ -550,7 +554,7 @@ class DemoWorld:
         # Replace each record's entries so rewritten keywords do not remain live.
         self.node.remove_records(doctor_id, epoch, record_ids)
         for record_id in record_ids:
-            if self.mode == "B" and not capability.scope.contains(record_id, self._tags()):
+            if self.mode in ("B", "C") and not capability.scope.contains(record_id, self._tags()):
                 continue
             for keyword in self._keywords.get(record_id, []):
                 pairs.append((record_id, keyword))

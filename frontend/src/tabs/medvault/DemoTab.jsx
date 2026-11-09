@@ -84,6 +84,7 @@ export default function DemoTab() {
             <select className={inputCls} value={mode} onChange={(e) => setMode(e.target.value)}>
               <option value="B">B — hardened</option>
               <option value="A">A — PPSEB baseline</option>
+              <option value="C">C — PAEKS-style PPSEB</option>
             </select>
           </Field>
           <Field label="Proof mode">

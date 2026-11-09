@@ -289,6 +289,75 @@ def measure_revocation_cost(config: MedVaultConfig, *, records: int = 20,
     return cost
 
 
+def measure_mode_costs(config: MedVaultConfig, mode: str, *, records: int = 10,
+                       doctors: int = 2, queries: int = 5) -> dict:
+    """Search latency, bytes per index entry and one revocation, for one mode.
+
+    Same records, same doctors, same queries for every mode, so the rows of the
+    trade-off table are comparable. Small on purpose: modes A and C run
+    PPSEB's `verify` once per entry per search at toy parameters.
+    """
+    world = build_world(config, mode=mode)
+    record_ids = [f"rec-{i:03d}" for i in range(records)]
+    for i, record_id in enumerate(record_ids):
+        world.upload_record(record_id, f"record {i}",
+                            [KEYWORD_DICTIONARY[i % len(KEYWORD_DICTIONARY)]])
+    scope = Scope.record_set(record_ids)
+    for index in range(doctors):
+        world.grant_scope(f"doctor_{chr(ord('a') + index)}", scope)
+    _results, elapsed_ms = _timed(
+        lambda: [world.search("doctor_b", KEYWORD_DICTIONARY[j % len(KEYWORD_DICTIONARY)])
+                 for j in range(queries)])
+    entries = world.node.entries("doctor_b", world.ledger.current_epoch(world.patient_id))
+    entry_bytes = (sum(len(e.token) + len(e.payload) + len(e.patient_signature)
+                       for e in entries) / len(entries)) if entries else None
+    revoke, _ = world.revoke_doctor("doctor_a")
+    cost = revoke["cost"]
+    return {"mode": mode, "records": records, "doctors": doctors, "queries": queries,
+            "search_ms_per_query": round(elapsed_ms / queries, 3),
+            "index_entry_bytes": round(entry_bytes, 1) if entry_bytes else None,
+            "revocation_ms": cost["time_ms"], "revocation_re_index_ops": cost["re_index_ops"],
+            "params": {"n": world.params.n, "q": world.params.q}}
+
+
+#: Design properties, not measurements: what each mode makes public by construction.
+MODE_PROPERTIES = {
+    "A": {"public_verify": True, "what_it_is": "PPSEB as published (baseline)"},
+    "A′": {"public_verify": True, "what_it_is": "PPSEB + cheap CT₂ shape check on writes"},
+    "B": {"public_verify": False, "what_it_is": "keyed HMAC index, signed one-time requests"},
+    "C": {"public_verify": True, "what_it_is": "PPSEB on HMAC(K_pd, keyword): PAEKS-style"},
+}
+
+
+def mode_tradeoff_table(attacks: dict, costs: dict, kga_trials: dict) -> list[dict]:
+    """Deck slide 44 ("costs speed / costs openness / nearly free"), measured.
+
+    One row per mode. Attack outcomes come from the harness, costs from
+    `measure_mode_costs`; mode A′ differs from A only on the write path, so it
+    reuses A's search and revocation costs and says so.
+    """
+    summary = attacks["summary"]
+    rows = []
+    for mode in ("A", "A′", "B", "C"):
+        base = "A" if mode == "A′" else mode
+        kga = kga_trials[f"mode_{base}"]
+        rows.append({
+            "mode": mode,
+            **MODE_PROPERTIES[mode],
+            "trapdoor_or_token_on_chain": summary["token_on_chain"][base],
+            "kga_outsider": f"{kga['outsider']['successes']}/{kga['outsider']['trials']}",
+            "kga_keyless_server":
+                f"{kga['keyless_server']['successes']}/{kga['keyless_server']['trials']}",
+            "kga_insider": f"{kga['insider']['successes']}/{kga['insider']['trials']}",
+            "search_replay_succeeds": summary["replay_succeeds"][base],
+            "retrieval_replay_succeeds": summary["retrieval_replay_succeeds"][base],
+            "plant_succeeds": summary["plant_succeeds"][mode],
+            **{k: v for k, v in costs[base].items() if k not in ("mode",)},
+            "costs_reused_from": "A" if mode == "A′" else None,
+        })
+    return rows
+
+
 def measure_shape_check(config: MedVaultConfig, *, samples: int) -> dict:
     """False-reject rate of the mode A′ shape check on honest PEKS ciphertexts."""
     from ppseb.params import default_params
@@ -306,23 +375,38 @@ def measure_shape_check(config: MedVaultConfig, *, samples: int) -> dict:
 # Assembly
 # --------------------------------------------------------------------------
 
+def _trial_counts(cell: dict) -> dict:
+    """Successes over trials, whether the cell is a rate or a single trial."""
+    if "trials" in cell:
+        return {k: cell[k] for k in (
+            "successes", "trials", "wrong_keyword_matches", "own_ciphertext_failures",
+            "success_rate_given_working_search_pct")}
+    broken = int(cell.get("own_ciphertext_failed", False))
+    return {"successes": int(cell["success"]), "trials": 1,
+            "wrong_keyword_matches": int(cell.get("wrong_keyword", False)),
+            "own_ciphertext_failures": broken,
+            "success_rate_given_working_search_pct":
+                None if broken else (100.0 if cell["success"] else 0.0)}
+
+
 def run_repro(seed: int = 42, *, fast: bool = False) -> dict:
     """Regenerate every headline number. Must stay under 600 seconds."""
     config = MedVaultConfig(seed=seed)
     started = time.perf_counter()
 
-    attacks = run_all_attacks(config, kga_rates=True, kga_seeds=1 if fast else 2)
+    # Fast mode (the Evidence tab's live button) runs one KGA trial per cell;
+    # the committed numbers come from the full run: every keyword x 2 seeds.
+    attacks = run_all_attacks(config, kga_rates=not fast, kga_seeds=2,
+                              modes=("A", "B", "C"))
     kga_success = {
         f"mode_{mode}": {attacker: attacks["kga"][f"mode_{mode}"][attacker]["success_rate_pct"]
                          for attacker in attacks["kga"][f"mode_{mode}"]}
-        for mode in ("A", "B")
+        for mode in ("A", "B", "C")
     }
     kga_trials = {
-        f"mode_{mode}": {attacker: {k: cell[k] for k in (
-                             "successes", "trials", "wrong_keyword_matches",
-                             "own_ciphertext_failures", "success_rate_given_working_search_pct")}
+        f"mode_{mode}": {attacker: _trial_counts(cell)
                          for attacker, cell in attacks["kga"][f"mode_{mode}"].items()}
-        for mode in ("A", "B")
+        for mode in ("A", "B", "C")
     }
     kga_trials["control_unkeyed_hash"] = {
         k: attacks["kga"]["control_unkeyed_hash"][k]
@@ -349,6 +433,10 @@ def run_repro(seed: int = 42, *, fast: bool = False) -> dict:
                          "replay_reason": attacks["retrieval_replay"][mode]["replay_reason"]}
         for mode in ("A", "B")
     }
+
+    mode_costs = {mode: measure_mode_costs(config, mode, records=5 if fast else 10)
+                  for mode in ("A", "B", "C")}
+    tradeoff = mode_tradeoff_table(attacks, mode_costs, kga_trials)
 
     storage = measure_storage_overhead(config)
     revocation = measure_revocation_cost(config, records=10 if fast else 20)
@@ -380,6 +468,7 @@ def run_repro(seed: int = 42, *, fast: bool = False) -> dict:
         "replay_plant": replay_plant,
         "retrieval_replay": retrieval_replay,
         "shape_check": shape_check,
+        "mode_tradeoff": tradeoff,
         "access_pattern": {
             f"mode_{mode}": {
                 "token_on_chain": attacks["access_pattern"][mode]["token_on_chain"],
@@ -430,6 +519,9 @@ def deterministic_headline(result: dict) -> dict:
         "replay_plant": result["replay_plant"],
         "retrieval_replay": result["retrieval_replay"],
         "shape_check": result["shape_check"],
+        "mode_tradeoff": [{k: v for k, v in row.items()
+                           if k not in ("search_ms_per_query", "revocation_ms")}
+                          for row in result["mode_tradeoff"]],
         "access_pattern": result["access_pattern"],
         "storage_overhead": result["storage_overhead"],
         "lattice_params": result["meta"]["lattice_params"],
@@ -465,6 +557,9 @@ def main(argv: list[str] | None = None) -> int:
           f"mode B {summary['mode_B']['outsider']}%")
     print(f"  KGA insider   mode A {summary['mode_A']['insider']}%  "
           f"mode B {summary['mode_B']['insider']}%")
+    print(f"  KGA mode C    outsider {summary['mode_C']['outsider']}%  "
+          f"keyless {summary['mode_C']['keyless_server']}%  "
+          f"insider {summary['mode_C']['insider']}%  (trapdoor public, Verify public)")
     print(f"  replay        mode A {result['replay_plant']['mode_A']['replay']}  "
           f"mode B {result['replay_plant']['mode_B']['replay']}")
     print(f"  plant         mode A {result['replay_plant']['mode_A']['plant']}  "
