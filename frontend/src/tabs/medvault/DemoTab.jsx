@@ -80,6 +80,22 @@ export default function DemoTab() {
       >
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 items-end">
           <Field label="Seed"><input type="number" className={inputCls} value={seed} onChange={(e) => setSeed(e.target.value)} /></Field>
+          <div className="col-span-1 lg:col-span-4 text-2xs text-ink-400 leading-relaxed">
+            Fixed setup for every run: <span className="mono">index mode B</span>,{" "}
+            <span className="mono">in-process ledger</span>, Groth16 when the prover is installed
+            (otherwise the labelled signed fallback). The settings in the session panel below do
+            not change the demo, and the demo does not change your session.
+          </div>
+        </div>
+        <ErrorBanner message={op.error} />
+      </Card>
+
+      <Card
+        title="Session for the Patient, Doctor and Auditor views"
+        subtitle="These settings apply only to a new session. To show the blockchain, choose the local Hardhat chain here, start a session, then grant, search and revoke in the Patient and Doctor views."
+      >
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 items-end">
+          <Field label="Seed"><input type="number" className={inputCls} value={seed} onChange={(e) => setSeed(e.target.value)} /></Field>
           <Field label="Index mode">
             <select className={inputCls} value={mode} onChange={(e) => setMode(e.target.value)}>
               <option value="B">B — hardened</option>
@@ -102,10 +118,9 @@ export default function DemoTab() {
           </Field>
           <PrimaryButton onClick={newSession} disabled={op.busy}>New session</PrimaryButton>
         </div>
-        <ErrorBanner message={op.error} />
         <p className="text-2xs text-ink-500 mt-3 leading-relaxed">
-          A new session replaces the world every MedVault view reads from. The demo itself always runs
-          on its own fresh world at the chosen seed, so a rehearsal and the presentation agree.
+          A new session replaces the world every MedVault view reads from. The Hardhat chain needs
+          <span className="mono"> start.cmd --with-chain</span> running first.
         </p>
       </Card>
 

@@ -343,14 +343,20 @@ def eval_tables(full: bool = False):
 
 @router.post("/system/demo-run")
 def demo_run(seed: int = 42):
-    """The whole sequence in one call (Requirement 13.14, no manual steps)."""
+    """The whole sequence in one call (Requirement 13.14, no manual steps).
+
+    The demo always runs on its own fresh world: index mode B, the in-process
+    ledger, Groth16 when the prover is installed. It deliberately leaves the
+    interactive session alone. It used to replace that session with an
+    in-process one afterwards, which silently took a Hardhat session the user
+    had just started off the chain.
+    """
     report = run_demo(MedVaultConfig(seed=seed))
     # R13.11: always saved as "latest"; the golden backup moves only on a clean pass.
     saved = record_run(report)
-    SESSION["world"] = build_world(MedVaultConfig(seed=seed, zk_mode="auto"))
     result = {k: v for k, v in report.items() if k != "state"}
     result["trace_saved"] = {"promoted": saved["promoted"], "reason": saved["reason"]}
-    return _envelope(result, [], SESSION["world"])
+    return _envelope(result, [], _world())
 
 
 @router.get("/system/demo-trace")

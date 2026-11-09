@@ -165,8 +165,18 @@ def trace_paths(tmp_path, monkeypatch):
 
 
 def test_demo_endpoint_runs_the_whole_sequence(client, trace_paths):
+    # A session the user chose beforehand (here mode A) must survive the demo:
+    # the endpoint used to replace it with a fresh in-process world, which took
+    # a Hardhat session off the chain without saying so.
+    client.post("/api/medvault/session/new",
+                json={"seed": 7, "mode": "A", "zk_mode": "signed", "ledger_mode": "memory"})
+    session_before = api_core.SESSION["world"]
+
     response = client.post("/api/medvault/system/demo-run?seed=42")
     report = response.json()["result"]
+    assert api_core.SESSION["world"] is session_before
+    assert api_core.SESSION["world"].mode == "A"
+    assert report["mode"] == "B" and report["ledger_backend"] == "memory-ledger"
     golden, latest = trace_paths
     assert latest.exists() and golden.exists()
     assert report["trace_saved"]["promoted"] is True
